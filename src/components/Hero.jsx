@@ -466,7 +466,7 @@ function StoryCard({ progress, activeIndex, finalOpen }) {
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <motion.div
           className="relative w-[min(530px,calc(100vw-32px))]"
-          style={{ x: cardX, scale: cardScale, perspective: 1200 }}
+          style={{ x: cardX, scale: cardScale }}
         >
           <motion.div
             aria-hidden="true"

@@ -209,3 +209,12 @@ html {
     scroll-behavior: auto !important;
   }
 }
+/* Disable backdrop-filter on card faces during 3D flip — it breaks backface-visibility in Chrome */
+.preserve-3d>.glass-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* Compensate visually with a stronger background */
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.042)),
+    rgba(10, 14, 30, 0.82);
+}
