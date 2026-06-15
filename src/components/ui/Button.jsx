@@ -7,15 +7,7 @@ const variants = {
   ghost: 'text-muted hover:text-foreground hover:bg-white/[0.045]',
 }
 
-export function Button({
-  children,
-  className,
-  variant = 'primary',
-  href,
-  showArrow = false,
-  magnetic = true,
-  ...props
-}) {
+export function Button({ children, className, variant = 'primary', href, showArrow = false, magnetic = true, ...props }) {
   const Component = href ? 'a' : 'button'
 
   return (

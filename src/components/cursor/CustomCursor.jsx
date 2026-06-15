@@ -38,27 +38,18 @@ export default function CustomCursor() {
       return setVariant('default')
     }
 
-    const handleOut = (event) => {
-      if (!event.relatedTarget || !event.relatedTarget.closest?.('[data-cursor], a, button, input, textarea')) {
-        setVariant('default')
-      }
-    }
-
     window.addEventListener('pointermove', handleMove)
     document.addEventListener('pointerover', handleOver)
-    document.addEventListener('pointerout', handleOut)
 
     return () => {
       window.removeEventListener('pointermove', handleMove)
       document.removeEventListener('pointerover', handleOver)
-      document.removeEventListener('pointerout', handleOut)
     }
   }, [enabled, mouseX, mouseY])
 
   if (!enabled) return null
 
-  const size = variant === 'button' ? 46 : variant === 'card' ? 60 : variant === 'input' ? 34 : 24
-  const opacity = variant === 'default' ? 0.78 : 0.94
+  const size = variant === 'button' ? 46 : variant === 'card' ? 62 : variant === 'input' ? 34 : 24
 
   return (
     <>
@@ -66,19 +57,14 @@ export default function CustomCursor() {
         aria-hidden="true"
         className="pointer-events-none fixed left-0 top-0 z-[1000] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_18px_rgba(0,240,255,0.9)]"
         style={{ x: dotX, y: dotY }}
-        animate={{ width: variant === 'input' ? 3 : 7, height: variant === 'input' ? 28 : 7, opacity }}
+        animate={{ width: variant === 'input' ? 3 : 7, height: variant === 'input' ? 28 : 7 }}
         transition={{ type: 'spring', stiffness: 520, damping: 32 }}
       />
       <motion.div
         aria-hidden="true"
         className="pointer-events-none fixed left-0 top-0 z-[999] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/35 bg-primary/[0.025] mix-blend-screen backdrop-blur-[1px]"
         style={{ x: ringX, y: ringY }}
-        animate={{
-          width: size,
-          height: size,
-          opacity: variant === 'default' ? 0.5 : 0.78,
-          boxShadow: variant === 'card' ? '0 0 34px rgba(0,240,255,0.2)' : '0 0 22px rgba(0,240,255,0.12)',
-        }}
+        animate={{ width: size, height: size, opacity: variant === 'default' ? 0.5 : 0.78 }}
         transition={{ type: 'spring', stiffness: 380, damping: 30 }}
       />
     </>
