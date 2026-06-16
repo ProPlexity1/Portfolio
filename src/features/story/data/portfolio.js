@@ -10,7 +10,7 @@ import {
   Target,
 } from 'lucide-react'
 
-export const techStack = ['React', 'Laravel', 'PostgreSQL', 'Tailwind CSS', 'JWT', 'Docker']
+export const techStack = ['React', 'Laravel', 'PostgreSQL', 'Tailwind CSS', 'JWT']
 
 export const terminalLines = [
   ['$ whoami', 'Ukasha Bin Khalil'],

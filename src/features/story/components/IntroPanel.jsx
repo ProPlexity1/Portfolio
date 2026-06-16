@@ -35,8 +35,8 @@ export default function IntroPanel({ progress }) {
   const x = useTransform(progress, [0, 0.1, CENTERING_END], [0, -64, -230])
   const opacity = useTransform(progress, [0, 0.09, CENTERING_END], [1, 0.72, 0])
   const filter = useTransform(progress, [0, CENTERING_END], ['blur(0px)', 'blur(16px)'])
-  const mobileOpacity = useTransform(progress, [0, 0.06], [1, 0])
-  const mobileY = useTransform(progress, [0, 0.06], [0, -20])
+  const mobileOpacity = useTransform(progress, [0, 0.09], [1, 0])
+  const mobileY = useTransform(progress, [0, 0.09], [0, -24])
 
   return (
     <>

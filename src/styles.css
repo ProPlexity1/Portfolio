@@ -221,3 +221,10 @@ select,
     scroll-behavior: auto !important;
   }
 }
+/* existing sm breakpoint stays, add this BELOW it */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .story-card-frame {
+    width: min(480px, calc(100vw - 48px));
+    height: clamp(460px, calc(100dvh - 140px), 560px);
+  }
+}
