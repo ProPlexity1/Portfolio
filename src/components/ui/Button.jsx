@@ -18,7 +18,7 @@ export function Button({ children, className, variant = 'primary', href, showArr
       onMouseMove={magnetic ? magneticPointer : undefined}
       onMouseLeave={magnetic ? resetMagneticPointer : undefined}
       className={cn(
-        'group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full px-5 py-3 text-sm font-semibold transition-[transform,box-shadow,background,border,color] duration-300 ease-out will-change-transform',
+        'group relative inline-flex touch-manipulation items-center justify-center gap-2 overflow-hidden rounded-full px-5 py-3 text-sm font-semibold transition-[transform,box-shadow,background,border,color] duration-300 ease-out will-change-transform active:scale-[0.96] active:shadow-[0_0_44px_rgba(0,240,255,0.34)]',
         'before:absolute before:inset-0 before:rounded-full before:bg-[linear-gradient(110deg,transparent,rgba(255,255,255,0.34),transparent)] before:translate-x-[-130%] before:transition-transform before:duration-700 hover:before:translate-x-[130%]',
         variants[variant],
         className,

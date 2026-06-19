@@ -1,6 +1,9 @@
 export const CENTERING_END = 0.16
 export const FLIP_START = 0.14
 export const FLIP_END = 0.8
+export const MOBILE_CARD_ENTER_END = 0.6
+export const MOBILE_FLIP_START = 0.58
+export const MOBILE_FLIP_END = 0.88
 export const SHATTER_START = 0.88
 export const FINAL_REVEAL = 0.935
 
