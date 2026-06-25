@@ -3,6 +3,11 @@ import { motion } from 'framer-motion'
 
 const WRONG_CHARS = '!@#$%^&*()QWERTY'
 const randomWrongChar = () => WRONG_CHARS[Math.floor(Math.random() * WRONG_CHARS.length)]
+const BASE_CHAR_DELAY = 15
+const CHAR_DELAY_VARIANCE = 15
+const GLITCH_CHANCE = 0.35
+const GLITCH_DELAY = 20
+const GLITCH_SECOND_DELAY = 20
 
 export default function TypewriterText({ text, active = true, showCursor = false, onDone }) {
   const [displayText, setDisplayText] = useState('')
@@ -29,7 +34,7 @@ export default function TypewriterText({ text, active = true, showCursor = false
       }
 
       const targetChar = text[index]
-      const shouldGlitch = Math.random() > 0.6 && targetChar !== ' '
+      const shouldGlitch = Math.random() > GLITCH_CHANCE && targetChar !== ' '
 
       if (shouldGlitch) {
         current += randomWrongChar()
@@ -51,22 +56,22 @@ export default function TypewriterText({ text, active = true, showCursor = false
                   current += targetChar
                   setDisplayText(current)
                   index++
-                  schedule(typeChar, 50 + Math.random() * 80)
-                }, 80)
-              }, 120)
+                  schedule(typeChar, BASE_CHAR_DELAY + Math.random() * CHAR_DELAY_VARIANCE)
+                }, GLITCH_SECOND_DELAY)
+              }, GLITCH_DELAY)
             } else {
               current += targetChar
               setDisplayText(current)
               index++
-              schedule(typeChar, 50 + Math.random() * 80)
+              schedule(typeChar, BASE_CHAR_DELAY + Math.random() * CHAR_DELAY_VARIANCE)
             }
-          }, 80)
-        }, 100 + Math.random() * 120)
+          }, GLITCH_DELAY)
+        }, BASE_CHAR_DELAY + Math.random() * CHAR_DELAY_VARIANCE)
       } else {
         current += targetChar
         setDisplayText(current)
         index++
-        schedule(typeChar, 40 + Math.random() * 70)
+        schedule(typeChar, BASE_CHAR_DELAY + Math.random() * CHAR_DELAY_VARIANCE)
       }
     }
 

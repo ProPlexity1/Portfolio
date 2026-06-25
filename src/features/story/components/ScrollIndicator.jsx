@@ -13,7 +13,7 @@ export default function ScrollIndicator({ progress, velocity, activeIndex, onJum
           className="absolute inset-x-1 top-1 origin-top rounded-full bg-gradient-to-b from-primary via-primary/70 to-secondary"
           style={{ scaleY, boxShadow: glow }}
         />
-        <div className="content-layer absolute inset-y-4 left-1/2 flex -translate-x-1/2 flex-col justify-between">
+        <div className="content-layer absolute inset-y-4 left-1/2 flex -translate-x-1/2 flex-col items-center justify-center gap-3">
           {cardPages.map((page, index) => (
             <button
               key={page.id}
