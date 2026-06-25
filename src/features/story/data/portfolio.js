@@ -15,7 +15,7 @@ export const techStack = ['React', 'Laravel', 'PostgreSQL', 'Tailwind CSS', 'JWT
 export const terminalLines = [
   ['$ whoami', 'Ukasha Bin Khalil'],
   ['$ services', 'Websites / SaaS / Dashboards'],
-  ['$ latest-project', 'Inventory Management SaaS'],
+  ['$ latest-project', 'Storix - Inventory Management SaaS'],
   ['$ availability', 'Available for Client Work'],
 ]
 
