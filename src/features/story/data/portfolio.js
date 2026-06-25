@@ -37,7 +37,7 @@ export const projects = [
   },
   {
     number: '02',
-    title: 'Flowventory',
+    title: 'Storix',
     icon: PackageCheck,
     stack: ['React', 'PostgreSQL', 'JWT Authentication'],
     description: 'Inventory management SaaS for stock tracking, secure access and business workflow visibility.',
