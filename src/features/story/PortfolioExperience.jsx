@@ -13,7 +13,6 @@ import ScrollIndicator from './components/ScrollIndicator'
 import FinalContact from './components/FinalContact'
 import FinalFooter from './components/FinalFooter'
 import { BreakFlash, BrokenShardField, ImpactSurface } from './components/ShatterEffects'
-import TouchInteractionLayer from './components/TouchInteractionLayer'
 
 function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value))
@@ -38,7 +37,6 @@ export default function PortfolioExperience() {
       <div className="global-spotlight" />
       <div className="grid-orb" />
       <CustomCursor />
-      <TouchInteractionLayer enabled={isTouch} />
       <Navbar />
       <ScrollIndicator progress={progress} velocity={scrollVelocity} activeIndex={activeIndex} onJump={jumpToPage} />
 
@@ -51,8 +49,8 @@ export default function PortfolioExperience() {
 
         <ImpactSurface progress={progress} />
         <StoryCard progress={progress} velocity={scrollVelocity} isTouch={isTouch} isWideDesktop={isWideDesktop} activeIndex={activeIndex} onPageGesture={jumpRelative} finalOpen={finalOpen} />
-        <BrokenShardField progress={progress} />
-        <BreakFlash progress={progress} />
+        {!isTouch && <BrokenShardField progress={progress} />}
+        {!isTouch && <BreakFlash progress={progress} />}
         <FinalContact progress={progress} finalOpen={finalOpen} />
         <FinalFooter progress={progress} />
       </main>

@@ -1,19 +1,20 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useInView } from 'framer-motion'
 import { Code2 } from 'lucide-react'
 import { terminalLines } from '../data/portfolio'
 import TypewriterText from '../components/TypewriterText'
 
-// ─── Count Up Hook ───────────────────────────────────────────────────────────
 function useCountUp(target, duration = 1000) {
   const [count, setCount] = useState(0)
   const ref = useRef(null)
   const inView = useInView(ref, { once: true })
 
   useEffect(() => {
-    if (!inView) return
+    if (!inView) return undefined
+    let frame = null
     let start = null
     const numeric = parseInt(target)
+    if (Number.isNaN(numeric)) return undefined
     const suffix = target.replace(String(numeric), '')
 
     const step = (timestamp) => {
@@ -21,16 +22,16 @@ function useCountUp(target, duration = 1000) {
       const progress = Math.min((timestamp - start) / duration, 1)
       const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
       setCount(Math.floor(eased * numeric) + suffix)
-      if (progress < 1) requestAnimationFrame(step)
+      if (progress < 1) frame = requestAnimationFrame(step)
     }
 
-    requestAnimationFrame(step)
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
   }, [inView, target, duration])
 
   return { count, ref }
 }
 
-// ─── Stat Card ───────────────────────────────────────────────────────────────
 function Stat({ label, value }) {
   const isNumeric = /\d/.test(value)
   const { count, ref } = useCountUp(value, 1000)
@@ -45,7 +46,6 @@ function Stat({ label, value }) {
   )
 }
 
-// ─── Terminal Scan Line ───────────────────────────────────────────────────────
 function ScanLine() {
   return (
     <motion.div
@@ -64,18 +64,15 @@ function ScanLine() {
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 const totalPhases = terminalLines.length * 2
 
 export default function OverviewPage() {
   const [phase, setPhase] = useState(0)
 
-  const advance = () => setPhase(p => Math.min(p + 1, totalPhases))
+  const advance = () => setPhase((current) => Math.min(current + 1, totalPhases))
 
   return (
-    <div className="content-layer flex h-full flex-col justify-between p-3 sm:p-5">
-
-      {/* ── Header ── */}
+    <div className="content-layer flex min-h-full flex-col p-3 sm:p-5">
       <div>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -91,7 +88,6 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* ── Stats ── */}
         <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-5 sm:gap-2.5">
           <Stat label="Projects" value="2+" />
           <Stat label="Stack" value="React + Laravel" />
@@ -99,18 +95,15 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* ── Terminal ── */}
-      <div className="relative mt-3 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#020511]/70 p-2.5 font-mono text-[0.65rem] sm:mt-4 sm:p-4 sm:text-[0.75rem] h-[50%] sm:h-[80%]">
+      <div className="relative mt-3 min-h-72 flex-1 overflow-hidden rounded-3xl border border-white/[0.08] bg-[#020511]/70 p-2.5 font-mono text-[0.65rem] sm:mt-4 sm:p-4 sm:text-[0.75rem]">
         <ScanLine />
 
-        {/* Traffic lights */}
         <div className="mb-3 flex items-center gap-1.5 sm:mb-4">
           <span className="size-2.5 rounded-full bg-red-400/80" />
           <span className="size-2.5 rounded-full bg-amber-300/80" />
           <span className="size-2.5 rounded-full bg-emerald-300/80" />
         </div>
 
-        {/* Lines */}
         <div className="space-y-2.5 sm:space-y-3">
           {terminalLines.map(([command, response], index) => {
             const cmdPhase = index * 2
@@ -124,7 +117,6 @@ export default function OverviewPage() {
                 animate={{ opacity: phase >= cmdPhase ? 1 : 0 }}
                 transition={{ duration: 0.1 }}
               >
-                {/* Command */}
                 <p className="text-primary/90">
                   {phase >= cmdPhase ? (
                     <TypewriterText
@@ -135,7 +127,6 @@ export default function OverviewPage() {
                   ) : null}
                 </p>
 
-                {/* Response */}
                 {phase > cmdPhase && (
                   <p className="mt-1 text-foreground/90">
                     <TypewriterText
@@ -151,7 +142,6 @@ export default function OverviewPage() {
           })}
         </div>
       </div>
-
     </div>
   )
 }

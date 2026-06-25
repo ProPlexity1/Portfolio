@@ -24,8 +24,12 @@ export default function ProjectsPage() {
               <div className="mt-2 flex flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
                 {project.stack.map((item) => <span key={item} className="rounded-full border border-white/[0.08] bg-black/20 px-2 py-1 text-[0.62rem] font-medium text-foreground/85 sm:px-2.5 sm:text-[0.68rem]">{item}</span>)}
               </div>
-              <div className="mt-3 h-12 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#020511]/60 p-2 sm:h-16 sm:p-3">
-                <div className="grid h-full grid-cols-4 gap-2">{[1, 2, 3, 4].map((item) => <span key={item} className="rounded-xl bg-gradient-to-br from-primary/18 to-white/[0.04]" />)}</div>
+              <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
+                {project.features.map((feature) => (
+                  <span key={feature} className="rounded-xl border border-primary/15 bg-primary/[0.06] px-2.5 py-1.5 text-[0.62rem] font-semibold text-primary/90 sm:text-[0.68rem]">
+                    {feature}
+                  </span>
+                ))}
               </div>
             </article>
           )

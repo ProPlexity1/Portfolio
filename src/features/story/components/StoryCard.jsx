@@ -20,7 +20,7 @@ function clamp(value, min = 0, max = 1) {
 function CardPage({ page }) {
   const Page = page.component
   return (
-    <div data-internal-scroll="true" className="h-full overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div data-internal-scroll="true" className="card-scroll h-full overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Page />
     </div>
   )
@@ -66,9 +66,10 @@ function FallSpeedLines({ progress, velocity }) {
 export default function StoryCard({ progress, velocity, isTouch, isWideDesktop, activeIndex, onPageGesture, finalOpen }) {
   const pointerRotateY = useMotionValue(0)
   const pointerY = useSpring(pointerRotateY, { stiffness: 190, damping: 20 })
-  const tilt = useDeviceTilt(isTouch && !finalOpen)
+  const tilt = useDeviceTilt(!isTouch && !finalOpen)
   const flipControls = useAnimationControls()
   const flipId = useRef(0)
+  const touchGesture = useRef(null)
   const [activePage, setActivePage] = useState(0)
   const [renderedPage, setRenderedPage] = useState(0)
   const [direction, setDirection] = useState(1)
@@ -92,30 +93,33 @@ export default function StoryCard({ progress, velocity, isTouch, isWideDesktop, 
     const dir = direction >= 0 ? 1 : -1
 
     const runFlip = async () => {
+      const exitDuration = isTouch ? 0.16 : 0.25
+      const enterDuration = isTouch ? 0.24 : 0.46
+
       await flipControls.start({
         rotateY: dir * 92,
-        rotateX: 2,
-        scale: 0.986,
-        filter: 'brightness(0.84)',
-        transition: { duration: 0.25, ease: [0.55, 0.06, 0.68, 0.19] },
+        rotateX: isTouch ? 0 : 2,
+        scale: isTouch ? 0.992 : 0.986,
+        filter: isTouch ? 'brightness(0.92)' : 'brightness(0.84)',
+        transition: { duration: exitDuration, ease: [0.55, 0.06, 0.68, 0.19] },
       })
 
       if (flipId.current !== id) return
       setRenderedPage(activePage)
-      flipControls.set({ rotateY: -dir * 92, rotateX: -2 })
+      flipControls.set({ rotateY: -dir * 92, rotateX: isTouch ? 0 : -2 })
 
       await flipControls.start({
         rotateY: 0,
         rotateX: 0,
         scale: 1,
         filter: 'brightness(1)',
-        transition: { duration: 0.46, ease: [0.22, 1, 0.36, 1] },
+        transition: { duration: enterDuration, ease: [0.22, 1, 0.36, 1] },
       })
     }
 
     runFlip()
     return undefined
-  }, [activePage, direction, flipControls, renderedPage])
+  }, [activePage, direction, flipControls, isTouch, renderedPage])
 
   // Horizontal entrance + deliberate final impact only. Regular flips always resolve to the front.
   const cardX = useTransform(
@@ -147,11 +151,46 @@ export default function StoryCard({ progress, velocity, isTouch, isWideDesktop, 
     pointerRotateY.set(0)
   }
 
-  const handleDragEnd = (_, info) => {
+  const handlePointerDown = (event) => {
     if (!isTouch || finalOpen) return
-    const intent = info.offset.x + info.velocity.x * 0.18
-    if (intent < -70) onPageGesture?.(1)
-    if (intent > 70) onPageGesture?.(-1)
+    touchGesture.current = {
+      x: event.clientX,
+      y: event.clientY,
+      time: performance.now(),
+      horizontal: false,
+    }
+  }
+
+  const handlePointerMove = (event) => {
+    if (!isTouch || finalOpen || !touchGesture.current) return
+    const gesture = touchGesture.current
+    const dx = event.clientX - gesture.x
+    const dy = event.clientY - gesture.y
+
+    if (!gesture.horizontal && Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+      gesture.horizontal = true
+    }
+
+    if (gesture.horizontal) {
+      pointerRotateY.set(clamp(dx / 18, -5, 5))
+    }
+  }
+
+  const finishTouchGesture = (event) => {
+    if (!isTouch || finalOpen || !touchGesture.current) return
+    const gesture = touchGesture.current
+    touchGesture.current = null
+    pointerRotateY.set(0)
+
+    const dx = event.clientX - gesture.x
+    const dy = event.clientY - gesture.y
+    const elapsed = Math.max(performance.now() - gesture.time, 16)
+    const velocityX = dx / elapsed
+    const horizontalIntent = Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.25
+
+    if (!horizontalIntent) return
+    if (dx + velocityX * 120 < -54) onPageGesture?.(1)
+    if (dx + velocityX * 120 > 54) onPageGesture?.(-1)
   }
 
   return (
@@ -160,7 +199,7 @@ export default function StoryCard({ progress, velocity, isTouch, isWideDesktop, 
         className="story-card-frame perspective-1200 relative"
         style={{ x: cardX, y: impactY, scale: impactScale, rotateZ: impactRotateZ }}
       >
-        <FallSpeedLines progress={progress} velocity={velocity} />
+        {!isTouch && <FallSpeedLines progress={progress} velocity={velocity} />}
         <motion.div
           aria-hidden="true"
           className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[90px]"
@@ -178,22 +217,24 @@ export default function StoryCard({ progress, velocity, isTouch, isWideDesktop, 
             data-page-index={activeIndex}
             onMouseMove={handleMove}
             onMouseLeave={handleLeave}
-            drag={isTouch && !finalOpen ? 'x' : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.16}
-            onDragEnd={handleDragEnd}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={finishTouchGesture}
+            onPointerCancel={finishTouchGesture}
             whileTap={isTouch && !finalOpen ? { scale: 0.985, boxShadow: '0 0 72px rgba(0,240,255,0.22)' } : undefined}
-            className={`glass-panel group relative h-full w-full overflow-hidden rounded-[2rem] will-change-transform ${finalOpen ? 'pointer-events-none' : 'pointer-events-auto'}`}
-            style={{ rotateX: isTouch ? tilt.rotateX : 0, rotateY: isTouch ? tilt.rotateY : pointerY, transformPerspective: 1200, transformOrigin: '50% 50%' }}
+            className={`glass-panel story-card group relative h-full w-full overflow-hidden rounded-[2rem] will-change-transform ${finalOpen ? 'pointer-events-none' : 'pointer-events-auto'}`}
+            style={{ rotateX: isTouch ? 0 : tilt.rotateX, rotateY: pointerY, transformPerspective: 1200, transformOrigin: '50% 50%' }}
           >
             <div className="absolute -right-16 -top-16 size-52 rounded-full bg-primary/10 blur-3xl" />
             <div className="absolute -bottom-20 -left-16 size-60 rounded-full bg-secondary/14 blur-3xl" />
-            <motion.div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-[-20%] z-20 w-1/3 rotate-12 bg-gradient-to-r from-transparent via-white/14 to-transparent opacity-70"
-              animate={{ x: ['-170%', '430%'] }}
-              transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 }}
-            />
+            {!isTouch && (
+              <motion.div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-[-20%] z-20 w-1/3 rotate-12 bg-gradient-to-r from-transparent via-white/14 to-transparent opacity-70"
+                animate={{ x: ['-170%', '430%'] }}
+                transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 }}
+              />
+            )}
 
             <div className="absolute inset-0 z-10 overflow-hidden rounded-[2rem]">
               <motion.div
@@ -209,7 +250,7 @@ export default function StoryCard({ progress, velocity, isTouch, isWideDesktop, 
 
             <BottomUpBreakOverlay progress={progress} />
             <CrackOverlay progress={progress} />
-            {glassShards.map((shard) => <ForegroundShard key={shard.clip} shard={shard} progress={progress} />)}
+            {!isTouch && glassShards.map((shard) => <ForegroundShard key={shard.clip} shard={shard} progress={progress} />)}
           </motion.div>
         </motion.div>
       </motion.div>
