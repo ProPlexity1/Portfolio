@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
+import { stage } from '../engine'
 
 const RIDGE = 'M0 120 L70 88 L112 98 L168 52 L206 70 L250 18 L292 62 L330 46 L396 104 L460 82 L520 120'
 
@@ -16,12 +17,11 @@ export default function Preloader({ onDone }) {
     let finished = false
     const start = performance.now()
 
-    // the <picture> in Stage makes the real request (AVIF or WebP); wait for that one
-    const img = document.querySelector('.world-img')
-    const loadPhoto = img ? img.decode().catch(() => {}) : Promise.resolve()
+    // the stage loads the photo, depth map and snow textures; wait for those
+    const loadPhoto = stage.ready
     const assets = Promise.all([loadPhoto.then(() => (target = 82)), document.fonts?.ready.then(() => (target = Math.max(target, 40)))])
     const minTime = new Promise((r) => setTimeout(r, 1100))
-    Promise.race([Promise.all([assets, minTime]), new Promise((r) => setTimeout(r, 6000))]).then(() => {
+    Promise.race([Promise.all([assets, minTime]), new Promise((r) => setTimeout(r, 9000))]).then(() => {
       target = 100
       finished = true
     })

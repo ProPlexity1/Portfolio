@@ -1,6 +1,6 @@
 import { motion, useReducedMotionConfig } from 'framer-motion'
 import { ArrowDown, ArrowRight } from 'lucide-react'
-import { CTA } from '../content'
+import { CTA, STOPS } from '../content'
 import { flyToId, flyToStop } from '../scroller'
 import { EASE } from '../engine'
 import { Kinetic } from '../ui'
@@ -34,7 +34,7 @@ export default function Summit({ ready }) {
               {CTA.contact}
               <ArrowRight className="size-4" strokeWidth={2} />
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => flyToStop(3)}>
+            <button type="button" className="btn btn-ghost" onClick={() => flyToStop(STOPS.findIndex((s) => s.id === 'work'))}>
               {CTA.work}
               <ArrowDown className="size-4" strokeWidth={2} />
             </button>

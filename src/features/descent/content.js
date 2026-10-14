@@ -7,8 +7,11 @@ export const CTA = { contact: 'Start a project', work: 'See the work' }
 
 // One entry per stop on the way down. `cam` is where the camera looks in the
 // photo (image pixels, 1500x2000) and how far it zooms past "cover" framing.
+// The summit stop is a boot-level close-up of the snow; `fallback` is used when
+// WebGL is unavailable and the close-up can't be drawn.
 export const STOPS = [
-  { id: 'summit', label: 'Summit', alt: 5180, cam: { x: 740, y: 455, z: [1.9, 2.3] } },
+  { id: 'summit', label: 'Summit', alt: 5180, cam: { x: 721, y: 432, z: [40, 45] }, fallback: { x: 740, y: 455, z: [1.9, 2.3] } },
+  { id: 'ridge', label: 'The view', alt: 5150, cam: { x: 740, y: 470, z: [1.9, 2.3] }, rail: false },
   { id: 'about', label: 'About', alt: 4870, cam: { x: 655, y: 590, z: [1.6, 2.6] } },
   { id: 'services', label: 'Services', alt: 4520, cam: { x: 1000, y: 650, z: [1.7, 2.3] } },
   { id: 'work', label: 'Work', alt: 4140, cam: { x: 300, y: 830, z: [2.0, 2.0] } },
@@ -19,15 +22,14 @@ export const STOPS = [
 
 // Trail through the photo. Points flagged with `stop` sit under that stop's camera.
 export const TRAIL = [
-  [548, 668], [585, 600], [628, 540], [675, 488], [712, 446], { p: [740, 420], stop: 0 },
-  [776, 462], [742, 528], { p: [662, 598], stop: 1 },
-  [760, 640], [870, 668], { p: [962, 704], stop: 2 },
-  [905, 790], [760, 838], [580, 862], { p: [384, 884], stop: 3 },
-  [520, 902], [760, 902], [960, 918], [1080, 990], { p: [1176, 1132], stop: 4 },
-  [1300, 1238], [1190, 1350], { p: [1086, 1474], stop: 5 },
-  [1040, 1610], [990, 1712], [930, 1772], { p: [846, 1806], stop: 6 },
+  [548, 668], [585, 600], [628, 540], [675, 488], [712, 446], { p: [740, 420], stop: [0, 1] },
+  [776, 462], [742, 528], { p: [662, 598], stop: 2 },
+  [760, 640], [870, 668], { p: [962, 704], stop: 3 },
+  [905, 790], [760, 838], [580, 862], { p: [384, 884], stop: 4 },
+  [520, 902], [760, 902], [960, 918], [1080, 990], { p: [1176, 1132], stop: 5 },
+  [1300, 1238], [1190, 1350], { p: [1086, 1474], stop: 6 },
+  [1040, 1610], [990, 1712], [930, 1772], { p: [846, 1806], stop: 7 },
 ]
-export const SUMMIT_INDEX = 5
 
 export const facts = [
   ['whoami', 'Ukasha Bin Khalil'],

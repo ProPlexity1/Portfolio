@@ -8,16 +8,21 @@ export const IMG_H = 2000
 const LAST = STOPS.length - 1
 
 export const state = {
-  u: 0, // continuous stop index, 0 = summit, 6 = base camp
+  u: 0, // continuous stop index, 0 = summit close-up, last = base camp
   vw: 1,
   vh: 1,
   portrait: false,
   anchors: STOPS.map(() => 0),
   ready: false,
   reduced: false,
+  gl: false, // WebGL stage running (enables the close-up)
 }
 
-if (import.meta.env.DEV) window.__descent = state
+if (import.meta.env?.DEV) window.__descent = state
+
+// Resolves once the stage has what it needs for the first frame.
+export const stage = {}
+stage.ready = new Promise((resolve) => (stage.resolve = resolve))
 
 const subs = new Set()
 export function subscribe(fn) {
@@ -49,8 +54,9 @@ export function uFromScroll(y, anchors) {
 export function camera(u, vw, vh, portrait) {
   const i = Math.min(LAST - 1, Math.floor(u))
   const t = smoother(clamp(u - i))
-  const a = STOPS[i].cam
-  const b = STOPS[i + 1].cam
+  const cam = (k) => (!state.gl && STOPS[k].fallback) || STOPS[k].cam
+  const a = cam(i)
+  const b = cam(i + 1)
   const zi = portrait ? 1 : 0
   const x = lerp(a.x, b.x, t)
   const y = lerp(a.y, b.y, t)
@@ -101,7 +107,7 @@ export function buildTrail() {
 
   const stopLen = []
   TRAIL.forEach((p, i) => {
-    if (!Array.isArray(p)) stopLen[p.stop] = len[idx[i]]
+    if (!Array.isArray(p)) [].concat(p.stop).forEach((k) => (stopLen[k] = len[idx[i]]))
   })
 
   // footprints: smaller and denser up high, bigger near the camera
@@ -120,9 +126,9 @@ export function buildTrail() {
     const size = lerp(5.5, 21, clamp((y - 400) / 1420))
     const nx = -Math.sin(ang) * side * size * 0.34
     const ny = Math.cos(ang) * side * size * 0.34
-    prints.push({ x: x + nx, y: y + ny, r: (ang * 180) / Math.PI + 90, k: size / 22, side, d })
+    prints.push({ x: x + nx, y: y + ny, r: (ang * 180) / Math.PI + 90, k: (size / 22) * 0.8, side, d })
     side = -side
-    d += size * 1.05
+    d += size * 1.6
   }
 
   const pointAt = (dist) => {

@@ -13,6 +13,7 @@ import Approach from './sections/Approach'
 import { Basecamp, Contact } from './sections/Basecamp'
 import Services from './sections/Services'
 import Stack from './sections/Stack'
+import Ridge from './sections/Ridge'
 import Summit from './sections/Summit'
 import Work from './sections/Work'
 
@@ -110,6 +111,7 @@ function Experience() {
       <Hud />
       <main className="relative">
         <Summit ready={ready} />
+        <Ridge />
         <About />
         <Services />
         <Work />

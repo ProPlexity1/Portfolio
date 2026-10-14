@@ -24,12 +24,13 @@ export default function Hud() {
         altRefs.current.forEach((el) => el && (el.textContent = fmt(a)))
         lastAlt = a
       }
-      const p = st.u / (STOPS.length - 1)
+      // the rail lists every stop except the ridge, which belongs to the summit
+      const p = Math.max(0, st.u - 1) / (STOPS.length - 2)
       if (marker.current) marker.current.style.transform = `translate3d(0,${(p * 100).toFixed(3)}%,0)`
       if (bar.current) bar.current.style.transform = `scaleX(${p.toFixed(4)})`
-      const active = Math.round(st.u)
+      const active = st.u < 1.5 ? 0 : Math.round(st.u)
       if (active !== lastActive && rail.current) {
-        rail.current.querySelectorAll('[data-stop]').forEach((el, i) => el.toggleAttribute('data-active', i === active))
+        rail.current.querySelectorAll('[data-stop]').forEach((el) => el.toggleAttribute('data-active', +el.dataset.stop === active))
         lastActive = active
       }
     })
@@ -83,9 +84,9 @@ export default function Hud() {
             </span>
           </span>
           <ol>
-            {STOPS.map((s, i) => (
+            {STOPS.map((s, i) => s.rail !== false && (
               <li key={s.id}>
-                <button type="button" data-stop onClick={() => go(i)}>
+                <button type="button" data-stop={i} onClick={() => go(i)}>
                   <span className="rail-tick" />
                   <span className="rail-label">{s.label}</span>
                 </button>
@@ -116,7 +117,7 @@ export default function Hud() {
                 </button>
               </div>
               <ol className="mt-5 grid gap-1">
-                {STOPS.map((s, i) => (
+                {STOPS.map((s, i) => s.rail !== false && (
                   <motion.li key={s.id} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 + i * 0.035 }}>
                     <button type="button" onClick={() => go(i)} className="sheet-link">
                       <span>{s.label}</span>
