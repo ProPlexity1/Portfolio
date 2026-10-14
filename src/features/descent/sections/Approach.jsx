@@ -32,7 +32,7 @@ export default function Approach() {
   return (
     <section id="approach" className="section flex min-h-[150svh] flex-col justify-center py-[20svh]">
       <div className="shell">
-        <div className="scrim-left max-w-[40rem] py-4">
+        <div className="max-w-[40rem] py-4 lg:ml-auto">
           <BlurIn className="h2">Built like the route depends on it</BlurIn>
           <ol ref={ref} className="mt-10 grid gap-8">
             {reasons.map((r, i) =>

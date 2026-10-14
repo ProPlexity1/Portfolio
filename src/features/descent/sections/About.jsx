@@ -54,7 +54,7 @@ export default function About() {
   return (
     <section id="about" className="section flex min-h-[150svh] flex-col justify-center py-[24svh]">
       <div className="shell">
-        <div ref={ref} className="scrim-left max-w-[44rem] py-6">
+        <div ref={ref} className="max-w-[44rem] py-6">
           <p className="statement" aria-label={STATEMENT}>
             <span aria-hidden="true">
               {reduce ? STATEMENT : words.map((w, i) => <Word key={i} word={w} i={i} n={words.length} progress={scrollYProgress} />)}

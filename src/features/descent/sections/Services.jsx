@@ -8,7 +8,7 @@ export default function Services() {
   const reduce = useReducedMotionConfig()
   return (
     <section id="services" className="section flex min-h-[150svh] flex-col justify-center py-[20svh]">
-      <div className="shell flex flex-col lg:items-end">
+      <div className="shell">
         <div className="w-full max-w-[46rem]">
           <BlurIn className="h2">What I build</BlurIn>
           <motion.div

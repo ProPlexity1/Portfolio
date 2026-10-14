@@ -26,7 +26,7 @@ export default function Stack() {
   return (
     <section id="stack" className="section flex min-h-[130svh] flex-col justify-center py-[20svh]">
       <div className="shell">
-        <div className="scrim-left max-w-[34rem]">
+        <div className="max-w-[34rem] lg:ml-auto lg:mr-[6%]">
           <BlurIn className="h2">The kit I carry</BlurIn>
           <Rise as="p" delay={0.15} className="mt-4 max-w-[40ch] text-snow/75">
             A small, proven stack I know end to end, from database to interface.

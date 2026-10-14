@@ -122,8 +122,36 @@ button { cursor: pointer; }
   transition: opacity 0.6s ease;
 }
 .gl.ready { opacity: 1; }
-.world-climber { background: none; pointer-events: none; }
-.world-climber img { position: absolute; width: 445px; height: 931px; }
+.climber {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 445px;
+  height: 931px;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.climber img { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* rim light: a blurred white silhouette behind the cutout, faded in at base camp */
+.climber-glow {
+  opacity: 0;
+  filter: brightness(0) invert(1) blur(9px);
+  transform: scale(1.015);
+  transform-origin: 50% 100%;
+}
+/* reading shade: a soft cinematic fall-off from the side the copy sits on */
+.stage-shade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgb(7 19 24 / 0.84) 0%, rgb(7 19 24 / 0.66) 28%, rgb(7 19 24 / 0.28) 52%, transparent 72%);
+}
+.stage-shade-right { transform: scaleX(-1); }
+@media (max-width: 1023px) {
+  .stage-shade { background: linear-gradient(180deg, rgb(7 19 24 / 0.32), rgb(7 19 24 / 0.55) 45%, rgb(7 19 24 / 0.78)); }
+}
 
 .trail {
   position: absolute;
@@ -260,15 +288,6 @@ main { overflow-x: clip; }
   letter-spacing: -0.045em;
   text-shadow: 0 2px 40px rgb(7 19 24 / 0.35);
 }
-.hero-scrim { position: relative; }
-.hero-scrim::before {
-  content: "";
-  position: absolute;
-  inset: -30% -20% -25% -35%;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(closest-side, rgb(7 19 24 / 0.6), rgb(7 19 24 / 0.25) 65%, transparent);
-}
 .h2 {
   font-family: var(--font-display);
   font-weight: 800;
@@ -285,16 +304,6 @@ main { overflow-x: clip; }
   line-height: 1.08;
   letter-spacing: -0.03em;
   text-shadow: 0 2px 30px rgb(7 19 24 / 0.55);
-}
-/* soft local shade behind text that sits directly on the photo */
-.scrim-left { position: relative; }
-.scrim-left::before {
-  content: "";
-  position: absolute;
-  inset: -12% -30% -12% -40%;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(closest-side, rgb(7 19 24 / 0.72), rgb(7 19 24 / 0.38) 60%, transparent);
 }
 
 .facts {

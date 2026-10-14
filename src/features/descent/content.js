@@ -11,13 +11,13 @@ export const CTA = { contact: 'Start a project', work: 'See the work' }
 // WebGL is unavailable and the close-up can't be drawn.
 export const STOPS = [
   { id: 'summit', label: 'Summit', alt: 5180, cam: { x: 725, y: 425, z: [115, 160] }, fallback: { x: 740, y: 455, z: [1.9, 2.3] } },
-  { id: 'ridge', label: 'The view', alt: 5150, cam: { x: 740, y: 470, z: [1.9, 2.3] }, rail: false },
-  { id: 'about', label: 'About', alt: 4870, cam: { x: 655, y: 590, z: [1.6, 2.6] } },
-  { id: 'services', label: 'Services', alt: 4520, cam: { x: 1000, y: 650, z: [1.7, 2.3] } },
-  { id: 'work', label: 'Work', alt: 4140, cam: { x: 300, y: 830, z: [2.0, 2.0] } },
-  { id: 'approach', label: 'Approach', alt: 3790, cam: { x: 1240, y: 1110, z: [2.4, 2.1] } },
-  { id: 'stack', label: 'Stack', alt: 3520, cam: { x: 1260, y: 1500, z: [2.4, 2.0] } },
-  { id: 'basecamp', label: 'Base camp', alt: 3260, cam: { x: 760, y: 1370, z: [1.0, 1.12] } },
+  { id: 'ridge', label: 'The view', alt: 5150, cam: { x: 740, y: 480, z: [1.25, 1.9] }, rail: false },
+  { id: 'about', label: 'About', alt: 4870, cam: { x: 655, y: 600, z: [1.3, 2.0] } },
+  { id: 'services', label: 'Services', alt: 4520, cam: { x: 1000, y: 660, z: [1.3, 1.9] } },
+  { id: 'work', label: 'Work', alt: 4140, cam: { x: 300, y: 840, z: [1.35, 2.0] } },
+  { id: 'approach', label: 'Approach', alt: 3790, cam: { x: 1240, y: 1150, z: [1.35, 2.0] }, side: 'right' },
+  { id: 'stack', label: 'Stack', alt: 3520, cam: { x: 1260, y: 1520, z: [1.35, 2.0] }, side: 'right' },
+  { id: 'basecamp', label: 'Base camp', alt: 3260, cam: { x: 735, y: 1350, z: [1.0, 1.12], fit: 1060 } },
 ]
 
 // Trail through the photo. Points flagged with `stop` sit under that stop's camera.

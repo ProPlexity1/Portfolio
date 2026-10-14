@@ -1,5 +1,6 @@
-// WebGL2 stage: the photo with depth parallax, the summit snow close-up, and every
-// footprint / pole hole multiplied onto the snow with its lighting baked in.
+// WebGL2 stage: the background plate (climber painted out), the summit snow
+// close-up, and every footprint / pole hole multiplied on with baked lighting.
+// The climber is a separate DOM layer so it moves as one piece, never warped.
 import { IMG_H, IMG_W } from '../engine'
 
 const PHOTO_VS = `#version 300 es
@@ -10,14 +11,11 @@ void main() {
 
 const PHOTO_FS = `#version 300 es
 precision highp float;
-uniform sampler2D uPhoto, uDepth, uSnow, uDetail;
+uniform sampler2D uPhoto, uSnow, uDetail;
 uniform vec2 uView;
 uniform float uDpr;
 uniform vec3 uCam;        // scale, tx, ty (css px)
-uniform vec2 uPar;        // parallax offset, world px
-uniform float uDolly;
-uniform vec2 uCenter;     // camera centre, world px
-uniform float uFocus;     // depth that stays still
+uniform vec2 uShift;      // rigid parallax offset, world px
 uniform vec4 uMacro;      // close-up rect in world px
 uniform float uMacroA;
 uniform float uTime;
@@ -26,11 +24,14 @@ const vec2 IMG = vec2(${IMG_W}.0, ${IMG_H}.0);
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
   vec2 q = vec2(gl_FragCoord.x, uView.y * uDpr - gl_FragCoord.y) / uDpr;
-  vec2 p0 = (q - uCam.yz) / uCam.x;
-  float k = texture(uDepth, p0 / IMG).r - uFocus;
-  vec2 p = p0 - k * uPar;
-  p = uCenter + (p - uCenter) * (1.0 - k * uDolly);
-  vec3 col = texture(uPhoto, p / IMG).rgb;
+  vec2 p0 = (q - uCam.yz) / uCam.x - uShift;
+  vec2 uv = p0 / IMG;
+  // past the photo's edge (wide screens at base camp): a soft, dim extension,
+  // feathered into the photo so there is no seam
+  vec2 inside = min(p0, IMG - p0);
+  float f = smoothstep(0.0, 70.0, min(inside.x, inside.y));
+  vec3 col = texture(uPhoto, clamp(uv, 0.0, 1.0)).rgb;
+  if (f < 1.0) col = mix(textureLod(uPhoto, clamp(uv, 0.0, 1.0), 7.0).rgb * 0.5, col, f);
   if (uMacroA > 0.001) {
     vec2 m = (p0 - uMacro.xy) / uMacro.zw;
     if (m.x > 0.0 && m.y > 0.0 && m.x < 1.0 && m.y < 1.0) {
@@ -63,18 +64,13 @@ layout(location = 2) in float aRot;
 layout(location = 3) in vec2 aScale;
 layout(location = 4) in float aD;
 layout(location = 5) in float aKind;
-uniform sampler2D uDepth;
 uniform vec2 uView;
 uniform vec3 uCam;
-uniform vec2 uPar;
-uniform float uDolly;
-uniform vec2 uCenter;
-uniform float uFocus;
+uniform vec2 uShift;
 uniform float uHead;
 uniform float uPressLen;
 out vec2 vUv;
 out float vPress;
-const vec2 IMG = vec2(${IMG_W}.0, ${IMG_H}.0);
 const float AW = 1792.0, AH = 1536.0;   // atlas: left print | right print | pole hole
 void main() {
   float press = clamp((uHead - aD) / uPressLen, 0.0, 1.0);
@@ -82,10 +78,7 @@ void main() {
   vec2 lp = aCorner * half_ * abs(aScale) * (1.0 + (1.0 - press) * 0.06);
   float c = cos(aRot), s = sin(aRot);
   vec2 w = aPos + vec2(c * lp.x - s * lp.y, s * lp.x + c * lp.y);
-  float k = textureLod(uDepth, aPos / IMG, 0.0).r - uFocus;
-  w = uCenter + (w - uCenter) / (1.0 - k * uDolly);
-  w += k * uPar;
-  vec2 q = w * uCam.x + uCam.yz;
+  vec2 q = (w + uShift) * uCam.x + uCam.yz;
   gl_Position = vec4(q.x / uView.x * 2.0 - 1.0, 1.0 - q.y / uView.y * 2.0, 0.0, 1.0);
   vec2 uv = aCorner * 0.5 + 0.5;
   if (aKind > 0.5) vUv = vec2((1536.0 + uv.x * 256.0) / AW, uv.y * 256.0 / AH);
@@ -96,12 +89,13 @@ void main() {
 const PRINT_FS = `#version 300 es
 precision highp float;
 uniform sampler2D uAtlas;
+uniform float uPrintA;
 in vec2 vUv;
 in float vPress;
 out vec4 o;
 void main() {
   vec3 ratio = texture(uAtlas, vUv).rgb * 2.0;
-  float p = vPress * vPress * (3.0 - 2.0 * vPress);
+  float p = vPress * vPress * (3.0 - 2.0 * vPress) * uPrintA;
   o = vec4(mix(vec3(1.0), ratio, p) * 0.5, 1.0);   // blended as 2 * src * dst
 }`
 
@@ -207,9 +201,9 @@ export function createRenderer(canvas, trail) {
     gl.uniform1i(loc, unit)
   }
 
-  // f: { s, tx, ty, par:[x,y], dolly, center:[x,y], focus, macro:[x,y,w,h], macroA, head, time }
+  // f: { s, tx, ty, shift:[x,y], macro:[x,y,w,h], macroA, head, printA, time }
   const render = (f) => {
-    if (!tex.photo || !tex.depth) return
+    if (!tex.photo) return
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.disable(gl.BLEND)
     gl.useProgram(photo.prog)
@@ -218,15 +212,11 @@ export function createRenderer(canvas, trail) {
     gl.uniform2f(U.uView, w, h)
     gl.uniform1f(U.uDpr, dpr)
     gl.uniform3f(U.uCam, f.s, f.tx, f.ty)
-    gl.uniform2f(U.uPar, f.par[0], f.par[1])
-    gl.uniform1f(U.uDolly, f.dolly)
-    gl.uniform2f(U.uCenter, f.center[0], f.center[1])
-    gl.uniform1f(U.uFocus, f.focus)
+    gl.uniform2f(U.uShift, f.shift[0], f.shift[1])
     gl.uniform4f(U.uMacro, ...f.macro)
     gl.uniform1f(U.uMacroA, macro)
     gl.uniform1f(U.uTime, f.time)
     bindTex(0, 'photo', U.uPhoto)
-    bindTex(1, 'depth', U.uDepth)
     if (macro) {
       bindTex(2, 'snow', U.uSnow)
       bindTex(4, 'detail', U.uDetail)
@@ -234,20 +224,17 @@ export function createRenderer(canvas, trail) {
     gl.bindVertexArray(empty)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
 
-    if (!tex.atlas) return
+    if (!tex.atlas || f.printA <= 0.001) return
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.DST_COLOR, gl.SRC_COLOR)
     gl.useProgram(print.prog)
     const P = print.u
     gl.uniform2f(P.uView, w, h)
     gl.uniform3f(P.uCam, f.s, f.tx, f.ty)
-    gl.uniform2f(P.uPar, f.par[0], f.par[1])
-    gl.uniform1f(P.uDolly, f.dolly)
-    gl.uniform2f(P.uCenter, f.center[0], f.center[1])
-    gl.uniform1f(P.uFocus, f.focus)
+    gl.uniform2f(P.uShift, f.shift[0], f.shift[1])
     gl.uniform1f(P.uHead, f.head)
+    gl.uniform1f(P.uPrintA, f.printA)
     gl.uniform1f(P.uPressLen, 4.5)
-    bindTex(1, 'depth', P.uDepth)
     bindTex(3, 'atlas', P.uAtlas)
     gl.bindVertexArray(vao)
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count)
@@ -258,7 +245,6 @@ export function createRenderer(canvas, trail) {
     resize,
     render,
     setPhoto: (img) => upload('photo', img),
-    setDepth: (img) => upload('depth', img, { format: gl.RED, internal: gl.R8, mip: false, raw: true }),
     setSnow: (img) => upload('snow', img),
     setDetail: (img) => upload('detail', img, { raw: true, wrap: gl.REPEAT }),
     setAtlas: (img) => upload('atlas', img, { raw: true }),

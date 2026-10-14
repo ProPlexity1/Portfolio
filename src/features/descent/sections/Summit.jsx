@@ -15,7 +15,7 @@ export default function Summit({ ready }) {
 
   return (
     <section id="summit" className="section relative flex min-h-[100svh] items-end pb-10 sm:pb-14 lg:pb-16">
-      <div className="shell hero-scrim grid w-full gap-8 lg:grid-cols-[1fr_minmax(0,25rem)] lg:items-end">
+      <div className="shell grid w-full gap-8 lg:grid-cols-[1fr_minmax(0,25rem)] lg:items-end">
         <div>
           <motion.p className="eyebrow" {...rise(0.5)}>
             Full stack developer

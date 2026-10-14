@@ -60,13 +60,14 @@ export function camera(u, vw, vh, portrait) {
   const zi = portrait ? 1 : 0
   const x = lerp(a.x, b.x, t)
   const y = lerp(a.y, b.y, t)
-  let z = Math.exp(lerp(Math.log(a.z[zi]), Math.log(b.z[zi]), t))
-  z *= 1 - 0.08 * Math.sin(Math.PI * t) * (u >= LAST ? 0 : 1)
   const cover = Math.max(vw / IMG_W, vh / IMG_H)
-  const s = cover * Math.max(1, z)
-  const tx = clamp(vw / 2 - x * s, vw - IMG_W * s, 0)
-  const ty = clamp(vh / 2 - y * s, vh - IMG_H * s, 0)
-  return { s, tx, ty }
+  // `fit` asks for that many photo pixels of height on screen (whole climber at
+  // base camp), even if the photo then no longer covers a wide screen
+  const scaleOf = (c) => (c.fit && !portrait ? Math.min(cover * c.z[zi], vh / c.fit) : cover * Math.max(1, c.z[zi]))
+  let s = Math.exp(lerp(Math.log(scaleOf(a)), Math.log(scaleOf(b)), t))
+  s *= 1 - 0.06 * Math.sin(Math.PI * t) * (u >= LAST ? 0 : 1)
+  const place = (c, view, size) => (size * s <= view ? (view - size * s) / 2 : clamp(view / 2 - c * s, view - size * s, 0))
+  return { s, tx: place(x, vw, IMG_W), ty: place(y, vh, IMG_H) }
 }
 
 export function altitude(u) {
