@@ -11,8 +11,7 @@ void main() {
 
 const PHOTO_FS = `#version 300 es
 precision highp float;
-uniform sampler2D uPhoto, uSnow, uDetail, uWide;
-uniform float uHasWide;   // 1 when the outpainted wide photo is loaded
+uniform sampler2D uPhoto, uSnow, uDetail;
 uniform vec2 uView;
 uniform float uDpr;
 uniform vec3 uCam;        // scale, tx, ty (css px)
@@ -36,15 +35,6 @@ void main() {
   if (f < 1.0) {
     vec2 fuv = ((q - uFill.yz) / uFill.x) / IMG;
     vec3 side = textureLod(uPhoto, clamp(fuv, 0.0, 1.0), 5.5).rgb * 0.92;
-    if (uHasWide > 0.5) {
-      // generated landscape either side of the photo, then the soft fill past it
-      const float E = 760.0;
-      vec2 wuv = vec2((p0.x + E) / (IMG.x + 2.0 * E), p0.y / IMG.y);
-      vec2 win = min(p0 + vec2(E, 0.0), vec2(IMG.x + E, IMG.y) - p0);
-      float wf = smoothstep(0.0, 90.0, min(win.x, win.y));
-      vec3 wide = texture(uWide, clamp(wuv, 0.0, 1.0)).rgb;
-      side = mix(textureLod(uWide, clamp(wuv, 0.0, 1.0), 5.5).rgb * 0.92, wide, wf);
-    }
     col = mix(side, col, f);
   }
   if (uMacroA > 0.001) {
@@ -229,12 +219,10 @@ export function createRenderer(canvas, trail) {
     gl.uniform3f(U.uCam, f.s, f.tx, f.ty)
     gl.uniform2f(U.uShift, f.shift[0], f.shift[1])
     gl.uniform3f(U.uFill, ...f.fill)
-    gl.uniform1f(U.uHasWide, tex.wide ? 1 : 0)
     gl.uniform4f(U.uMacro, ...f.macro)
     gl.uniform1f(U.uMacroA, macro)
     gl.uniform1f(U.uTime, f.time)
     bindTex(0, 'photo', U.uPhoto)
-    if (tex.wide) bindTex(5, 'wide', U.uWide)
     if (macro) {
       bindTex(2, 'snow', U.uSnow)
       bindTex(4, 'detail', U.uDetail)
@@ -264,7 +252,6 @@ export function createRenderer(canvas, trail) {
     render,
     setPhoto: (img) => upload('photo', img),
     setSnow: (img) => upload('snow', img),
-    setWide: (img) => upload('wide', img),
     setDetail: (img) => upload('detail', img, { raw: true, wrap: gl.REPEAT }),
     setAtlas: (img) => upload('atlas', img, { raw: true }),
   }

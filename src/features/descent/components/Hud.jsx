@@ -12,21 +12,53 @@ const STEPS = 30 // boot prints along the rail trail
 
 const BOOT = 'M-3.6-2.5C-4.4-7-3-11.2 0-11.2S4.6-7.6 3.9-3C3.5-.3 2.6 1.6 0 1.6S-3.2.4-3.6-2.5ZM-2.9 5.8C-2.9 3.9-1.6 3 .1 3S3 4 3 5.9 1.9 10.8.1 10.8-2.9 7.9-2.9 5.8Z'
 
-// Footprints stamped into the rail as you scroll; they replace the scrollbar.
+// A wandering line of boot prints: uneven stride, sway and angle, like a real
+// walker. Seeded so it is the same on every visit.
+function walk(n, seed) {
+  let x = seed
+  const rnd = () => ((x = (x * 16807) % 2147483647) / 2147483647) * 2 - 1
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1)
+    const side = i % 2 ? 1 : -1
+    const sway = Math.sin(t * Math.PI * 3.2 + 0.7) * 3.5 + Math.sin(t * Math.PI * 7.3) * 1.2
+    const heading = Math.cos(t * Math.PI * 3.2 + 0.7) * 14
+    return {
+      y: Math.min(1, Math.max(0, t + rnd() * 0.009)),
+      x: sway + side * (2.6 + rnd() * 0.7),
+      r: heading + side * 7 + rnd() * 9,
+      k: 0.9 + rnd() * 0.12,
+      side,
+    }
+  })
+}
+const PRINTS = walk(STEPS, 4271)
+
+// Footprints that get stamped into the rail as you scroll; they replace the scrollbar.
 function Steps({ className }) {
   return (
     <span className={`steps ${className}`} aria-hidden="true">
-      {Array.from({ length: STEPS }, (_, i) => (
+      {PRINTS.map((p, i) => (
         <svg
           key={i}
           viewBox="-6 -12 12 24"
           className="step"
-          style={{ top: `${(i / (STEPS - 1)) * 100}%`, '--x': i % 2 ? '3px' : '-3px', '--r': i % 2 ? '7deg' : '-7deg' }}
+          style={{ top: `${p.y * 100}%`, '--x': `${p.x.toFixed(2)}px`, '--r': `${p.r.toFixed(1)}deg`, '--k': p.k.toFixed(3) }}
         >
-          <path d={BOOT} transform={i % 2 ? 'scale(-1 1)' : undefined} />
+          <path d={BOOT} transform={p.side > 0 ? 'scale(-1 1)' : undefined} />
         </svg>
       ))}
     </span>
+  )
+}
+
+// Checkpoint: an X scratched in once the walker gets there.
+function Cross() {
+  return (
+    <svg viewBox="0 0 12 12" className="cross" aria-hidden="true">
+      <circle cx="6" cy="6" r="1.4" className="cross-dot" />
+      <path d="M2.5 2.5 9.5 9.5" pathLength="1" />
+      <path d="M9.5 2.5 2.5 9.5" pathLength="1" />
+    </svg>
   )
 }
 
@@ -107,7 +139,9 @@ export default function Hud() {
             {STOPS.map((s, i) => s.rail !== false && (
               <li key={s.id}>
                 <button type="button" data-stop={i} onClick={() => go(i)}>
-                  <span className="rail-tick" />
+                  <span className="rail-tick">
+                    <Cross />
+                  </span>
                   <span className="rail-label">{s.label}</span>
                 </button>
               </li>
@@ -120,7 +154,9 @@ export default function Hud() {
       <div className="trail-m lg:hidden" aria-hidden="true">
         <Steps className="steps-m" />
         {STOPS.map((s, i) => s.rail !== false && (
-          <span key={s.id} className="trail-m-cp" data-stop={i} style={{ top: `${(Math.max(0, i - 1) / (STOPS.length - 2)) * 100}%` }} />
+          <span key={s.id} className="trail-m-cp" data-stop={i} style={{ top: `${(Math.max(0, i - 1) / (STOPS.length - 2)) * 100}%` }}>
+            <Cross />
+          </span>
         ))}
       </div>
 

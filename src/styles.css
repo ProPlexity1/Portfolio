@@ -122,17 +122,32 @@ button { cursor: pointer; }
   transition: opacity 0.6s ease;
 }
 .gl.ready { opacity: 1; }
-.climber {
+.finale {
   position: absolute;
   left: 0;
   top: 0;
-  width: 445px;
-  height: 931px;
+  opacity: 0;
+  visibility: hidden;
   transform-origin: 0 0;
-  will-change: transform;
-  pointer-events: none;
+  will-change: transform, opacity;
 }
-.climber img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.finale-img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.finale-climber { position: absolute; }
+.finale-name {
+  position: absolute;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: min(9cqw, 22vw);
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  color: var(--color-snow);
+  white-space: nowrap;
+  text-shadow: 0 8px 40px rgb(7 19 24 / 0.35);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+.finale { container-type: size; }
 /* reading shade: a soft cinematic fall-off from the side the copy sits on */
 .stage-shade {
   position: absolute;
@@ -163,23 +178,6 @@ button { cursor: pointer; }
 }
 .fp.on { opacity: 0.62; transform: scale(1); }
 
-.stage-name {
-  position: absolute;
-  left: 0;
-  top: 0;
-  opacity: 0;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 200px;
-  transform-origin: 0 0;
-  line-height: 0.8;
-  letter-spacing: -0.04em;
-  text-transform: uppercase;
-  color: var(--color-snow);
-  white-space: nowrap;
-  text-shadow: 0 8px 40px rgb(7 19 24 / 0.35);
-  will-change: transform, opacity;
-}
 
 .wisps { position: absolute; inset: 0; will-change: transform, opacity; }
 .wisp, .bank {
@@ -754,55 +752,67 @@ main { overflow-x: clip; }
   transition: color 0.4s var(--ease);
 }
 .rail button:hover, .rail button[data-active] { color: var(--color-snow); }
-.rail-tick {            /* checkpoint: a ring that fills once reached */
+.rail-tick {            /* checkpoint column: the X sits on the trail */
   position: relative;
   z-index: 1;
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  border: 1.5px solid currentColor;
-  background: var(--color-ink);
-  transition: background-color 0.4s var(--ease), border-color 0.4s var(--ease), transform 0.4s var(--ease);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: rgb(234 242 242 / 0.5);
 }
-.rail button[data-reached] .rail-tick { background: var(--color-glacier); border-color: var(--color-glacier); }
-.rail button[data-active] .rail-tick { transform: scale(1.35); box-shadow: 0 0 0 4px rgb(111 209 201 / 0.2); }
+.cross { width: 12px; height: 12px; overflow: visible; }
+.cross path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.35s var(--ease);
+}
+.cross path + path { transition-delay: 0.18s; }
+.cross-dot { fill: currentColor; transition: opacity 0.2s; }
+[data-reached] .cross path { stroke-dashoffset: 0; }
+[data-reached] .cross-dot { opacity: 0; }
+.rail button[data-reached] .rail-tick { color: var(--color-snow); }
+.rail button[data-active] .rail-tick { color: var(--color-glacier); }
 
-/* the footprint trail: prints get stamped in as the page scrolls */
+/* the footprint trail: a print is only there once it has been stamped */
 .steps { position: absolute; pointer-events: none; }
-.steps-rail { left: 0; width: 9px; top: 1.1rem; bottom: 1.1rem; }
+.steps-rail { left: 0; width: 18px; top: 9px; bottom: 9px; }
 .step {
   position: absolute;
   left: 50%;
-  width: 5px;
-  height: 10px;
-  margin: -5px 0 0 -2.5px;
-  fill: rgb(234 242 242 / 0.18);
-  transform: translateX(var(--x)) rotate(var(--r)) scale(0.85);
-  transition: fill 0.35s ease, transform 0.45s var(--ease);
+  width: 6.5px;
+  height: 13px;
+  margin: -6.5px 0 0 -3.25px;
+  fill: rgb(234 242 242 / 0.85);
+  opacity: 0;
+  transform: translateX(var(--x)) rotate(var(--r)) scale(calc(var(--k) * 1.7));
+  transition: opacity 0.18s ease, transform 0.32s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
-.step.on { fill: var(--color-glacier); transform: translateX(var(--x)) rotate(var(--r)) scale(1); }
+.step.on { opacity: 1; transform: translateX(var(--x)) rotate(var(--r)) scale(var(--k)); }
 .trail-m {
   position: fixed;
   z-index: 30;
-  right: 6px;
-  top: 30vh;
-  height: 40vh;
-  width: 12px;
+  right: 4px;
+  top: 28vh;
+  height: 44vh;
+  width: 18px;
   pointer-events: none;
 }
 .steps-m { inset: 0; }
-.steps-m .step { width: 4px; height: 8px; margin: -4px 0 0 -2px; }
+.steps-m .step { width: 5px; height: 10px; margin: -5px 0 0 -2.5px; }
 .trail-m-cp {
   position: absolute;
   left: 50%;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px 0 0 -3.5px;
-  border-radius: 999px;
-  border: 1.5px solid rgb(234 242 242 / 0.6);
-  background: var(--color-ink);
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  color: rgb(234 242 242 / 0.55);
 }
-.trail-m-cp[data-reached] { background: var(--color-glacier); border-color: var(--color-glacier); }
+.trail-m-cp[data-reached] { color: var(--color-snow); }
 
 /* the footprints replace the native scrollbar */
 html { scrollbar-width: none; }

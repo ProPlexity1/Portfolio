@@ -9,8 +9,10 @@ import Snowfall from './Snowfall'
 const LAST = STOPS.length - 1
 // close-up snow patch around the last steps to the summit (world px, matches snow-macro aspect)
 const MACRO = [688, 402.8, 70, 58.33]
-// where the climber cutout sits in the photo (world px)
-const CLIMBER = { x: 510, y: 925, w: 445, h: 931 }
+// the climber in the descent photo (world px)
+const CLIMBER = { cx: 735, cy: 1390, h: 931 }
+// the final panorama and the climber inside it (its own pixels)
+const FIN = { w: 2000, h: 762, x: 952.3, y: 412.7, cw: 150.7, ch: 306.3 }
 
 const set = (el, key, value) => {
   if (el && el.__last?.[key] !== value) {
@@ -24,10 +26,10 @@ export default function Stage() {
   const [mode, setMode] = useState('gl')
   const canvas = useRef(null)
   const world = useRef(null)
-  const climber = useRef(null)
+  const finale = useRef(null)
+  const finName = useRef(null)
   const svg = useRef(null)
   const grade = useRef(null)
-  const name = useRef(null)
   const shade = useRef(null)
   const shadeR = useRef(null)
   const wisps = useRef(null)
@@ -44,8 +46,6 @@ export default function Stage() {
     let lastU = -1
     const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
     let latest = state
-    let nameW = 0
-    document.fonts?.ready.then(() => (nameW = 0))
 
     // ---- CSS fallback: SVG footprints, revealed by class ----
     const fps = mode === 'css' ? svg.current.querySelectorAll('.fp') : []
@@ -106,18 +106,31 @@ export default function Stage() {
         set(svg.current, 'opacity', printA.toFixed(3))
       }
 
-      // climber: the same pixels as the photo, locked on top so the name can pass behind him
-      const bc = ramp(u, LAST - 0.5, LAST)
-      set(climber.current, 'transform', `translate3d(${(tx + CLIMBER.x * s + back[0]).toFixed(2)}px,${(ty + CLIMBER.y * s + back[1]).toFixed(2)}px,0) scale(${s.toFixed(5)})`)
-
-      // base camp: the name sits behind the climber, sized to the photo; vignette lifts
-      if (!nameW && name.current.offsetWidth) nameW = name.current.offsetWidth
-      const nk = nameW ? (Math.min(IMG_W * s, vw) * 0.92) / nameW : 1
-      const nx = tx + 735 * s + back[0]
-      const ny = ty + 1150 * s + back[1]
-      set(name.current, 'opacity', bc.toFixed(3))
-      set(name.current, 'transform', `translate3d(${nx.toFixed(1)}px,${(ny + (1 - bc) * vh * 0.08).toFixed(1)}px,0) scale(${nk.toFixed(4)}) translate(-50%,-50%)`)
-      set(grade.current, 'opacity', (1 - bc).toFixed(3))
+      // finale: the panorama fades in with the climber matched to where he stands
+      // in the descent photo, then settles into its full framing
+      const fk = Math.max(vw / FIN.w, vh / FIN.h)
+      const fw = FIN.w * fk
+      const fh = FIN.h * fk
+      const pcx = FIN.x + FIN.cw / 2
+      const pcy = FIN.y + FIN.ch / 2
+      const bx = clamp(vw / 2 - pcx * fk, vw - fw, 0)
+      const by = (vh - fh) / 2
+      const fa = ramp(u, LAST - 0.42, LAST - 0.24)
+      const settle = 1 - Math.pow(1 - ramp(u, LAST - 0.5, LAST - 0.04), 3)
+      const m0 = (CLIMBER.h * s) / (FIN.ch * fk)
+      const m = Math.exp(Math.log(m0) * (1 - settle))
+      const ox = tx + CLIMBER.cx * s - (bx + pcx * fk * m0)
+      const oy = ty + CLIMBER.cy * s - (by + pcy * fk * m0)
+      set(finale.current, 'width', `${fw.toFixed(1)}px`)
+      set(finale.current, 'height', `${fh.toFixed(1)}px`)
+      set(finale.current, 'opacity', fa.toFixed(3))
+      set(finale.current, 'visibility', fa > 0 ? 'visible' : 'hidden')
+      set(finale.current, 'transform', `translate3d(${(bx + ox * (1 - settle) + back[0]).toFixed(2)}px,${(by + oy * (1 - settle) + back[1]).toFixed(2)}px,0) scale(${m.toFixed(5)})`)
+      // the name rises in behind him, sized to what is on screen
+      const na = ramp(u, LAST - 0.22, LAST)
+      set(finName.current, 'opacity', na.toFixed(3))
+      set(finName.current, 'transform', `translate(-50%,${(-50 + (1 - na) * 18).toFixed(2)}%)`)
+      set(grade.current, 'opacity', (1 - fa).toFixed(3))
       // reading shade behind section copy: off on the close-up and at base camp
       // which side the copy sits on, blended between stops
       const i = Math.min(LAST - 1, Math.floor(u))
@@ -211,13 +224,6 @@ export default function Stage() {
           canvas.current?.classList.add('ready')
           stage.resolve()
           request()
-          // wide screens frame the whole photo at the end: load the generated surroundings after start
-          if (window.innerWidth / window.innerHeight > 1.05) {
-            loadImage('/media/plate-wide.avif').then((img) => {
-              renderer.setWide(img)
-              request()
-            }).catch(() => {})
-          }
         })
         .catch(() => {
           state.gl = false
@@ -267,14 +273,25 @@ export default function Stage() {
         </svg>
       )}
 
-      <div ref={name} className="stage-name">
-        Ukasha
-      </div>
-
-      <div ref={climber} className="climber">
+      {/* finale: the panorama, the name, then the climber cut out of it on top */}
+      <div ref={finale} className="finale">
         <picture>
-          <source srcSet="/media/climber-2x.avif" type="image/avif" />
-          <img src="/media/climber-2x.webp" alt="" decoding="async" className="climber-img" />
+          <source srcSet="/media/finale.avif" type="image/avif" />
+          <img src="/media/finale.webp" alt="" decoding="async" loading="lazy" className="finale-img" />
+        </picture>
+        <div ref={finName} className="finale-name" style={{ left: `${((FIN.x + FIN.cw / 2) / FIN.w) * 100}%`, top: `${((FIN.y + FIN.ch * 0.3) / FIN.h) * 100}%` }}>
+          Ukasha
+        </div>
+        <picture>
+          <source srcSet="/media/finale-climber.avif" type="image/avif" />
+          <img
+            src="/media/finale-climber.webp"
+            alt=""
+            decoding="async"
+            loading="lazy"
+            className="finale-climber"
+            style={{ left: `${(FIN.x / FIN.w) * 100}%`, top: `${(FIN.y / FIN.h) * 100}%`, width: `${(FIN.cw / FIN.w) * 100}%`, height: `${(FIN.ch / FIN.h) * 100}%` }}
+          />
         </picture>
       </div>
 
