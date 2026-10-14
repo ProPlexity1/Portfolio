@@ -7,30 +7,58 @@ import { altitude, subscribe } from '../engine'
 import { flyToId, flyToStop } from '../scroller'
 
 const fmt = (n) => n.toLocaleString('en-US')
+const BASE = STOPS[STOPS.length - 1].alt
+const STEPS = 30 // boot prints along the rail trail
+
+const BOOT = 'M-3.6-2.5C-4.4-7-3-11.2 0-11.2S4.6-7.6 3.9-3C3.5-.3 2.6 1.6 0 1.6S-3.2.4-3.6-2.5ZM-2.9 5.8C-2.9 3.9-1.6 3 .1 3S3 4 3 5.9 1.9 10.8.1 10.8-2.9 7.9-2.9 5.8Z'
+
+// Footprints stamped into the rail as you scroll; they replace the scrollbar.
+function Steps({ className }) {
+  return (
+    <span className={`steps ${className}`} aria-hidden="true">
+      {Array.from({ length: STEPS }, (_, i) => (
+        <svg
+          key={i}
+          viewBox="-6 -12 12 24"
+          className="step"
+          style={{ top: `${(i / (STEPS - 1)) * 100}%`, '--x': i % 2 ? '3px' : '-3px', '--r': i % 2 ? '7deg' : '-7deg' }}
+        >
+          <path d={BOOT} transform={i % 2 ? 'scale(-1 1)' : undefined} />
+        </svg>
+      ))}
+    </span>
+  )
+}
 
 export default function Hud() {
   const altRefs = useRef([])
   const rail = useRef(null)
-  const marker = useRef(null)
-  const bar = useRef(null)
   const [menu, setMenu] = useState(false)
 
   useEffect(() => {
     let lastAlt = -1
     let lastActive = -1
+    let lastOn = -1
     return subscribe((st) => {
-      const a = altitude(st.u)
+      // descent meter: metres left to base camp, down to zero
+      const a = altitude(st.u) - BASE
       if (a !== lastAlt) {
         altRefs.current.forEach((el) => el && (el.textContent = fmt(a)))
         lastAlt = a
       }
       // the rail lists every stop except the ridge, which belongs to the summit
-      const p = Math.max(0, st.u - 1) / (STOPS.length - 2)
-      if (marker.current) marker.current.style.transform = `translate3d(0,${(p * 100).toFixed(3)}%,0)`
-      if (bar.current) bar.current.style.transform = `scaleX(${p.toFixed(4)})`
+      const p = Math.min(1, Math.max(0, st.u - 1) / (STOPS.length - 2))
+      const on = Math.round(p * (STEPS - 1)) + (st.u > 0.2 ? 1 : 0)
+      if (on !== lastOn) {
+        document.querySelectorAll('.steps').forEach((el) => el.querySelectorAll('.step').forEach((s, i) => s.classList.toggle('on', i < on)))
+        lastOn = on
+      }
       const active = st.u < 1.5 ? 0 : Math.round(st.u)
-      if (active !== lastActive && rail.current) {
-        rail.current.querySelectorAll('[data-stop]').forEach((el) => el.toggleAttribute('data-active', +el.dataset.stop === active))
+      if (active !== lastActive) {
+        document.querySelectorAll('[data-stop]').forEach((el) => {
+          el.toggleAttribute('data-active', +el.dataset.stop === active)
+          el.toggleAttribute('data-reached', +el.dataset.stop <= active)
+        })
         lastActive = active
       }
     })
@@ -57,7 +85,7 @@ export default function Hud() {
         </button>
         <div className="flex items-center gap-2">
           <span className="alt-chip lg:hidden" aria-hidden="true">
-            <span ref={(el) => (altRefs.current[0] = el)}>5,180</span> m
+            <span ref={(el) => (altRefs.current[0] = el)}>{fmt(STOPS[0].alt - BASE)}</span> m to go
           </span>
           <button type="button" onClick={() => flyToId('contact')} className="btn btn-primary btn-sm hidden sm:inline-flex">
             {CTA.contact}
@@ -66,23 +94,15 @@ export default function Hud() {
             <Menu className="size-5" strokeWidth={1.75} />
           </button>
         </div>
-        <span className="hud-progress lg:hidden" aria-hidden="true">
-          <span ref={bar} />
-        </span>
       </header>
 
       <nav ref={rail} className="rail" aria-label="Sections">
         <p className="rail-alt" aria-hidden="true">
-          <span ref={(el) => (altRefs.current[1] = el)}>5,180</span>
-          <small>m</small>
+          <span ref={(el) => (altRefs.current[1] = el)}>{fmt(STOPS[0].alt - BASE)}</span>
+          <small>m to go</small>
         </p>
         <div className="rail-track">
-          <span className="rail-line" />
-          <span className="rail-marker-wrap">
-            <span ref={marker} className="rail-marker">
-              <i />
-            </span>
-          </span>
+          <Steps className="steps-rail" />
           <ol>
             {STOPS.map((s, i) => s.rail !== false && (
               <li key={s.id}>
@@ -95,6 +115,14 @@ export default function Hud() {
           </ol>
         </div>
       </nav>
+
+      {/* phones: a slim trail on the right edge with a checkpoint per stop */}
+      <div className="trail-m lg:hidden" aria-hidden="true">
+        <Steps className="steps-m" />
+        {STOPS.map((s, i) => s.rail !== false && (
+          <span key={s.id} className="trail-m-cp" data-stop={i} style={{ top: `${(Math.max(0, i - 1) / (STOPS.length - 2)) * 100}%` }} />
+        ))}
+      </div>
 
       <AnimatePresence>
         {menu && (

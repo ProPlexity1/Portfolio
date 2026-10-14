@@ -71,8 +71,8 @@ export default function Stage() {
       // close-up fades out before its edges come on screen
       const cover = Math.min((MACRO[2] * s) / vw, (MACRO[3] * s) / vh)
       const macroA = mode === 'gl' ? clamp((cover - 0.6) / 0.6) : 0
-      // footprints belong to the summit; on the way down they would read as a dotted line
-      const printA = 1 - ramp(u, 1.15, 1.7)
+      // footprints only live in the snow close-up; on the photo they read as fake
+      const printA = mode === 'gl' ? clamp(macroA * 1.6) : 1 - ramp(u, 0.1, 0.5)
 
       // pointer eases toward its target
       pointer.x += (pointer.tx - pointer.x) * 0.07
@@ -211,6 +211,13 @@ export default function Stage() {
           canvas.current?.classList.add('ready')
           stage.resolve()
           request()
+          // wide screens frame the whole photo at the end: load the generated surroundings after start
+          if (window.innerWidth / window.innerHeight > 1.05) {
+            loadImage('/media/plate-wide.avif').then((img) => {
+              renderer.setWide(img)
+              request()
+            }).catch(() => {})
+          }
         })
         .catch(() => {
           state.gl = false

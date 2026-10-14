@@ -5,6 +5,11 @@ export const CONTACT_EMAIL = 'ukasha@example.com'
 
 export const CTA = { contact: 'Start a project', work: 'See the work' }
 
+export const SOCIALS = [
+  { id: 'github', label: 'GitHub', href: 'https://github.com/ProPlexity1' },
+  { id: 'linkedin', label: 'LinkedIn', href: 'https://www.linkedin.com/in/ukasha-bin-khalil-b8ba01351' },
+]
+
 // One entry per stop on the way down. `cam` is where the camera looks in the
 // photo (image pixels, 1500x2000) and how far it zooms past "cover" framing.
 // The summit stop is a boot-level close-up of the snow; `fallback` is used when
@@ -17,7 +22,7 @@ export const STOPS = [
   { id: 'work', label: 'Work', alt: 4140, cam: { x: 300, y: 840, z: [1.35, 2.0] } },
   { id: 'approach', label: 'Approach', alt: 3790, cam: { x: 1240, y: 1150, z: [1.35, 2.0] }, side: 'right' },
   { id: 'stack', label: 'Stack', alt: 3520, cam: { x: 1260, y: 1520, z: [1.35, 2.0] }, side: 'right' },
-  { id: 'basecamp', label: 'Base camp', alt: 3260, cam: { x: 740, y: 1000, z: [1.0, 1.0], fit: 2100 } },
+  { id: 'basecamp', label: 'Base camp', alt: 3260, cam: { x: 740, y: 1000, z: [1.0, 1.0], fit: 2000 } },
 ]
 
 // Trail through the photo. Points flagged with `stop` sit under that stop's camera.
@@ -53,6 +58,7 @@ export const projects = [
     stack: ['React', 'PostgreSQL', 'JWT auth'],
     description: 'Stock tracking with secure access, role management and a dashboard that shows the business what is moving and what is not.',
     features: ['Authentication', 'Inventory tracking', 'Dashboard analytics', 'Role management'],
+    url: 'https://storix-ims.vercel.app/',
   },
   {
     id: 'scholars',
@@ -61,6 +67,23 @@ export const projects = [
     stack: ['Laravel', 'Tailwind CSS'],
     description: 'An education site built for a real client: a calm interface, clear content structure and layouts that hold up on every screen.',
     features: ['Responsive UI', 'Content structure', 'Performance polish'],
+    url: 'https://thescholars.pk/',
+  },
+]
+
+// Still on the way up. Edit the descriptions once there is more to say.
+export const inProgress = [
+  {
+    id: 'pipeline',
+    title: 'The Pipeline',
+    kind: 'Product build',
+    description: 'An end-to-end product I am building from the ground up. The full write-up lands here when it ships.',
+  },
+  {
+    id: 'shield',
+    title: 'Canadian Shield Security',
+    kind: 'Operations dashboard for a security company',
+    description: 'A dashboard app for Canadian Shield Security, in active development with the client.',
   },
 ]
 

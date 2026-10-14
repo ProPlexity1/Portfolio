@@ -1,8 +1,9 @@
 import { motion, useReducedMotionConfig } from 'framer-motion'
+import { ArrowUpRight } from 'lucide-react'
 import { CheckTick, ScholarsArt, StorixArt } from '../art'
-import { projects } from '../content'
+import { inProgress, projects } from '../content'
 import { EASE } from '../engine'
-import { BlurIn } from '../ui'
+import { BlurIn, Rise } from '../ui'
 
 const ART = { storix: StorixArt, scholars: ScholarsArt }
 
@@ -47,17 +48,58 @@ export default function Work() {
                       </li>
                     ))}
                   </ul>
-                  <ul className="mt-6 flex flex-wrap gap-2 pt-1" aria-label="Built with">
-                    {p.stack.map((t) => (
-                      <li key={t} className="chip">
-                        {t}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-4 pt-1">
+                    <ul className="flex flex-wrap gap-2" aria-label="Built with">
+                      {p.stack.map((t) => (
+                        <li key={t} className="chip">
+                          {t}
+                        </li>
+                      ))}
+                    </ul>
+                    {p.url && (
+                      <a href={p.url} target="_blank" rel="noreferrer" className="visit">
+                        Visit site
+                        <ArrowUpRight className="size-4" strokeWidth={2} />
+                      </a>
+                    )}
+                  </div>
                 </div>
               </motion.article>
             )
           })}
+        </div>
+
+        <Rise as="h3" className="mt-16 font-display text-2xl sm:text-3xl">
+          Still on the climb
+        </Rise>
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
+          {inProgress.map((p, i) => (
+            <motion.article
+              key={p.id}
+              className="wip"
+              initial={reduce ? false : { opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.9, delay: i * 0.12, ease: EASE }}
+            >
+              {/* the route is still being cut: a dashed outline that keeps moving */}
+              <svg className="wip-outline" aria-hidden="true">
+                <rect x="1" y="1" rx="19" ry="19" />
+              </svg>
+              <p className="building">
+                <span className="building-dot" />
+                In the build
+              </p>
+              <h4 className="mt-4 font-display text-2xl sm:text-3xl">{p.title}</h4>
+              <p className="mt-1 font-mono text-xs text-mist">{p.kind}</p>
+              <p className="mt-4 max-w-[46ch] text-sm leading-relaxed text-snow/75">{p.description}</p>
+              <svg className="wip-route" viewBox="0 0 220 60" aria-hidden="true">
+                <path className="ahead" d="M4 52 C40 50 46 30 78 32 S120 46 142 26 178 8 214 10" pathLength="1" />
+                <path className="done" d="M4 52 C40 50 46 30 78 32 S120 46 142 26 178 8 214 10" pathLength="1" />
+                <circle cx="142" cy="26" r="4" />
+              </svg>
+            </motion.article>
+          ))}
         </div>
       </div>
     </section>

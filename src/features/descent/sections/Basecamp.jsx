@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ArrowUp, Check } from 'lucide-react'
 import { useState } from 'react'
-import { CONTACT_EMAIL, CTA, steps } from '../content'
+import { SocialIcon } from '../art'
+import { CONTACT_EMAIL, CTA, SOCIALS, steps } from '../content'
 import { flyToStop } from '../scroller'
 import { EASE } from '../engine'
 import { BlurIn, Rise } from '../ui'
@@ -10,7 +11,7 @@ export function Basecamp() {
   return (
     <section id="basecamp" className="section flex min-h-[110svh] items-end pb-[14svh]">
       <div className="shell lg:flex">
-        <Rise as="p" className="max-w-[22ch] font-display text-xl leading-snug text-snow sm:text-2xl lg:ml-auto lg:text-right lg:text-deep lg:[text-shadow:0_1px_24px_rgb(234_242_242/0.7)]">
+        <Rise as="p" className="max-w-[22ch] font-display text-xl leading-snug text-snow sm:text-2xl lg:ml-auto lg:text-right [text-shadow:0_2px_24px_rgb(7_19_24/0.75)]">
           Off the screen, this is usually where you will find me.
         </Rise>
       </div>
@@ -129,6 +130,14 @@ export function Contact() {
                 </Rise>
               ))}
             </ol>
+            <div className="mt-8 flex flex-wrap gap-3">
+              {SOCIALS.map((s) => (
+                <a key={s.id} href={s.href} target="_blank" rel="noreferrer" className="social" aria-label={s.label}>
+                  <SocialIcon id={s.id} />
+                  <span>{s.label}</span>
+                </a>
+              ))}
+            </div>
           </div>
           <ContactForm />
         </motion.div>
@@ -136,6 +145,12 @@ export function Contact() {
         <footer className="mt-10 flex flex-col-reverse items-start justify-between gap-6 border-t border-snow/10 pt-8 text-sm text-snow/60 sm:flex-row sm:items-center">
           <p>© {new Date().getFullYear()} Ukasha Bin Khalil</p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {SOCIALS.map((s) => (
+              <a key={s.id} href={s.href} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-2">
+                <SocialIcon id={s.id} className="size-4" />
+                {s.label}
+              </a>
+            ))}
             <a href={`mailto:${CONTACT_EMAIL}`} className="link">
               {CONTACT_EMAIL}
             </a>

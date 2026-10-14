@@ -416,6 +416,87 @@ main { overflow-x: clip; }
 @media (min-width: 768px) {
   .project-art { border-bottom: 0; border-right: 1px solid rgb(234 242 242 / 0.07); padding: 2rem; min-height: 13rem; }
 }
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-snow);
+  border: 1px solid rgb(234 242 242 / 0.2);
+  transition: border-color 0.3s var(--ease), color 0.3s var(--ease), transform 0.3s var(--ease);
+}
+.social:hover { color: var(--color-glacier); border-color: var(--color-glacier); transform: translateY(-2px); }
+.social:active { transform: scale(0.97); }
+
+.visit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-glacier);
+  border-bottom: 1px solid rgb(111 209 201 / 0.35);
+  padding-bottom: 2px;
+  transition: gap 0.3s var(--ease), border-color 0.3s;
+}
+.visit:hover { gap: 0.65rem; border-color: var(--color-glacier); }
+
+.wip {
+  position: relative;
+  padding: 1.6rem;
+  border-radius: 20px;
+  background: rgb(9 24 30 / 0.62);
+  overflow: hidden;
+}
+.wip-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.wip-outline rect {
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  fill: none;
+  stroke: rgb(111 209 201 / 0.55);
+  stroke-width: 1.2;
+  stroke-dasharray: 7 7;
+  animation: march 1.6s linear infinite;
+}
+@keyframes march { to { stroke-dashoffset: -28; } }
+.building {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-glacier);
+}
+.building-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-glacier);
+  animation: live 2s ease-out infinite;
+}
+/* half-drawn route: done up to the marker, dashed ahead of it */
+.wip-route {
+  margin-top: 1.4rem;
+  width: 100%;
+  max-width: 16rem;
+  height: auto;
+  overflow: visible;
+}
+.wip-route path { fill: none; stroke-width: 1.5; stroke-linecap: round; }
+.wip-route .done { stroke: rgb(234 242 242 / 0.8); stroke-dasharray: 0.6 1; }
+.wip-route .ahead { stroke: rgb(234 242 242 / 0.3); stroke-dasharray: 0.012 0.018; }
+.wip-route circle { fill: var(--color-glacier); }
+
 .chip {
   border-radius: 999px;
   padding: 0.3rem 0.8rem;
@@ -453,32 +534,74 @@ main { overflow-x: clip; }
   transform-origin: left;
 }
 
-.marquee {
-  margin-left: var(--rail);
-  overflow: hidden;
-  padding-block: 1.5rem;
-  background: rgb(7 19 24 / 0.6);
-  border-block: 1px solid rgb(234 242 242 / 0.08);
-  -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+.kit { position: relative; }
+.rope {
+  position: absolute;
+  inset: 0 0 auto 0;
+  width: 100%;
+  height: 40px;
+  overflow: visible;
 }
-.marquee-track {
-  display: flex;
-  width: max-content;
-  gap: clamp(2.5rem, 6vw, 5.5rem);
-  padding-right: clamp(2.5rem, 6vw, 5.5rem);
-  animation: marquee 34s linear infinite;
+.rope path { fill: none; stroke: rgb(234 242 242 / 0.45); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.kit-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(0.75rem, 2vw, 1.75rem);
 }
-.marquee:hover .marquee-track { animation-play-state: paused; }
-@keyframes marquee { to { transform: translate3d(-50%, 0, 0); } }
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  color: rgb(234 242 242 / 0.82);
-  font-family: var(--font-display);
-  font-size: clamp(1.25rem, 2.4vw, 1.9rem);
-  white-space: nowrap;
+.tag-wrap {
+  position: relative;
+  transform-origin: 50% var(--rope);
+}
+.tag-string {
+  position: absolute;
+  left: 50%;
+  top: var(--rope);
+  width: 1.5px;
+  height: calc(var(--drop) + 16px);
+  background: rgb(234 242 242 / 0.5);
+}
+.tag-string::before {          /* the clip on the rope */
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1.5px solid rgb(234 242 242 / 0.7);
+  background: var(--color-ink);
+}
+/* luggage tag: clipped top corners, punched hole, dark card */
+.tag {
+  position: relative;
+  margin-top: calc(var(--rope) + var(--drop) + 10px);
+  padding: 2.2rem 1.2rem 1.4rem;
+  color: var(--color-snow);
+  background: linear-gradient(180deg, rgb(12 30 36 / 0.92), rgb(7 19 24 / 0.92));
+  clip-path: polygon(22% 0, 78% 0, 100% 14%, 100% 100%, 0 100%, 0 14%);
+  border-radius: 0 0 14px 14px;
+  box-shadow: inset 0 0 0 1px rgb(234 242 242 / 0.12);
+  transition: transform 0.4s var(--ease);
+}
+.tag-hole {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-left: -0.35rem;
+  border-radius: 999px;
+  background: rgb(3 10 12);
+  box-shadow: 0 0 0 2px rgb(111 209 201 / 0.55);
+}
+.tag svg { color: var(--color-glacier); }
+@media (max-width: 767px) {
+  .rope { display: none; }
+  .kit-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tag-string { display: none; }
+  .tag { margin-top: 0; }
+  .tag-wrap:last-child { grid-column: span 2; }
 }
 
 /* ---------- controls ---------- */
@@ -598,21 +721,6 @@ main { overflow-x: clip; }
   border: 1px solid rgb(234 242 242 / 0.14);
   font-variant-numeric: tabular-nums;
 }
-.hud-progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: rgb(234 242 242 / 0.08);
-}
-.hud-progress span {
-  position: absolute;
-  inset: 0;
-  background: var(--color-glacier);
-  transform-origin: left;
-  transform: scaleX(0);
-}
 
 .rail { display: none; }
 @media (min-width: 1024px) {
@@ -635,37 +743,7 @@ main { overflow-x: clip; }
 }
 .rail-alt small { margin-left: 0.3rem; color: var(--color-mist); font-size: 0.75rem; }
 .rail-track { position: relative; }
-.rail-line {
-  position: absolute;
-  left: 4px;
-  top: 0.55rem;
-  bottom: 0.55rem;
-  width: 1px;
-  background: rgb(234 242 242 / 0.18);
-}
-.rail-marker-wrap {
-  position: absolute;
-  left: 0;
-  top: 0.55rem;
-  bottom: 0.55rem;
-  width: 9px;
-}
-.rail-marker {
-  position: absolute;
-  inset: 0;
-  will-change: transform;
-}
-.rail-marker i {
-  position: absolute;
-  top: -4.5px;
-  left: 0;
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--color-glacier);
-  box-shadow: 0 0 0 4px rgb(111 209 201 / 0.2);
-}
-.rail ol { display: grid; gap: 1.15rem; }
+.rail ol { position: relative; display: grid; gap: 1.6rem; }
 .rail button {
   display: flex;
   align-items: center;
@@ -676,11 +754,59 @@ main { overflow-x: clip; }
   transition: color 0.4s var(--ease);
 }
 .rail button:hover, .rail button[data-active] { color: var(--color-snow); }
-.rail-tick {
+.rail-tick {            /* checkpoint: a ring that fills once reached */
+  position: relative;
+  z-index: 1;
   width: 9px;
-  height: 1px;
-  background: currentColor;
+  height: 9px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  background: var(--color-ink);
+  transition: background-color 0.4s var(--ease), border-color 0.4s var(--ease), transform 0.4s var(--ease);
 }
+.rail button[data-reached] .rail-tick { background: var(--color-glacier); border-color: var(--color-glacier); }
+.rail button[data-active] .rail-tick { transform: scale(1.35); box-shadow: 0 0 0 4px rgb(111 209 201 / 0.2); }
+
+/* the footprint trail: prints get stamped in as the page scrolls */
+.steps { position: absolute; pointer-events: none; }
+.steps-rail { left: 0; width: 9px; top: 1.1rem; bottom: 1.1rem; }
+.step {
+  position: absolute;
+  left: 50%;
+  width: 5px;
+  height: 10px;
+  margin: -5px 0 0 -2.5px;
+  fill: rgb(234 242 242 / 0.18);
+  transform: translateX(var(--x)) rotate(var(--r)) scale(0.85);
+  transition: fill 0.35s ease, transform 0.45s var(--ease);
+}
+.step.on { fill: var(--color-glacier); transform: translateX(var(--x)) rotate(var(--r)) scale(1); }
+.trail-m {
+  position: fixed;
+  z-index: 30;
+  right: 6px;
+  top: 30vh;
+  height: 40vh;
+  width: 12px;
+  pointer-events: none;
+}
+.steps-m { inset: 0; }
+.steps-m .step { width: 4px; height: 8px; margin: -4px 0 0 -2px; }
+.trail-m-cp {
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 999px;
+  border: 1.5px solid rgb(234 242 242 / 0.6);
+  background: var(--color-ink);
+}
+.trail-m-cp[data-reached] { background: var(--color-glacier); border-color: var(--color-glacier); }
+
+/* the footprints replace the native scrollbar */
+html { scrollbar-width: none; }
+html::-webkit-scrollbar { display: none; }
 .rail-label { transition: transform 0.4s var(--ease); }
 .rail button[data-active] .rail-label { transform: translateX(4px); }
 
@@ -744,6 +870,4 @@ main { overflow-x: clip; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-  :root:not(.force-motion) .marquee-track { flex-wrap: wrap; width: auto; justify-content: center; animation: none; }
-  :root:not(.force-motion) .marquee-track > [aria-hidden] { display: none; }
 }
