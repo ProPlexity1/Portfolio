@@ -115,8 +115,12 @@ export default function Stage() {
       const pcy = FIN.y + FIN.ch / 2
       const bx = clamp(vw / 2 - pcx * fk, vw - fw, 0)
       const by = (vh - fh) / 2
-      const fa = ramp(u, LAST - 0.42, LAST - 0.24)
-      const settle = 1 - Math.pow(1 - ramp(u, LAST - 0.5, LAST - 0.04), 3)
+      const fa = ramp(u, LAST - 0.5, LAST - 0.4)
+      // the panorama opens out from the climber in a soft circle, so the world
+      // grows around him instead of two photos double-exposing
+      const reveal = ramp(u, LAST - 0.5, LAST - 0.2)
+      // stays pinned to the climber until the reveal covers the screen, then settles
+      const settle = 1 - Math.pow(1 - ramp(u, LAST - 0.28, LAST - 0.02), 3)
       const m0 = (CLIMBER.h * s) / (FIN.ch * fk)
       const m = Math.exp(Math.log(m0) * (1 - settle))
       const ox = tx + CLIMBER.cx * s - (bx + pcx * fk * m0)
@@ -124,8 +128,19 @@ export default function Stage() {
       set(finale.current, 'width', `${fw.toFixed(1)}px`)
       set(finale.current, 'height', `${fh.toFixed(1)}px`)
       set(finale.current, 'opacity', fa.toFixed(3))
+      let mask = 'none'
+      if (reveal < 1) {
+        const r = (Math.pow(reveal, 1.6) * 1.15 * Math.hypot(vw, vh) + FIN.ch * fk * 0.6) / m
+        mask = `radial-gradient(circle at ${((pcx / FIN.w) * 100).toFixed(2)}% ${((pcy / FIN.h) * 100).toFixed(2)}%, #000 ${(r * 0.5).toFixed(0)}px, transparent ${r.toFixed(0)}px)`
+      }
+      set(finale.current, 'maskImage', mask)
+      set(finale.current, 'webkitMaskImage', mask)
       set(finale.current, 'visibility', fa > 0 ? 'visible' : 'hidden')
-      set(finale.current, 'transform', `translate3d(${(bx + ox * (1 - settle) + back[0]).toFixed(2)}px,${(by + oy * (1 - settle) + back[1]).toFixed(2)}px,0) scale(${m.toFixed(5)})`)
+      // never let the panorama's own edge come on screen while it settles
+      const mm = Math.max(1, m)
+      const fx = clamp(bx + ox * (1 - settle), vw - fw * mm, 0)
+      const fy = clamp(by + oy * (1 - settle), vh - fh * mm, 0)
+      set(finale.current, 'transform', `translate3d(${(fx + back[0]).toFixed(2)}px,${(fy + back[1]).toFixed(2)}px,0) scale(${mm.toFixed(5)})`)
       // the name rises in behind him, sized to what is on screen
       const na = ramp(u, LAST - 0.22, LAST)
       set(finName.current, 'opacity', na.toFixed(3))
