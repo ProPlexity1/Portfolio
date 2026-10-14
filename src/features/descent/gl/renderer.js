@@ -11,7 +11,10 @@ void main() {
 
 const PHOTO_FS = `#version 300 es
 precision highp float;
-uniform sampler2D uPhoto, uSnow, uDetail;
+uniform sampler2D uPhoto, uSnow, uDetail, uFinale;
+uniform vec3 uFin;        // panorama placement: tx, ty, css px per panorama px
+uniform vec4 uReveal;     // reveal centre (css px), radius, feather
+uniform float uFinAmt;    // 0..1 panorama strength
 uniform vec2 uView;
 uniform float uDpr;
 uniform vec3 uCam;        // scale, tx, ty (css px)
@@ -23,6 +26,11 @@ uniform float uTime;
 out vec4 o;
 const vec2 IMG = vec2(${IMG_W}.0, ${IMG_H}.0);
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
 void main() {
   vec2 q = vec2(gl_FragCoord.x, uView.y * uDpr - gl_FragCoord.y) / uDpr;
   vec2 p0 = (q - uCam.yz) / uCam.x - uShift;
@@ -57,6 +65,16 @@ void main() {
       snow += step(0.985, n) * smoothstep(0.09, 0.0, d) * tw * clamp(uCam.x / 40.0, 0.0, 1.0);
       col = mix(col, snow, uMacroA * e);
     }
+  }
+  if (uFinAmt > 0.001) {
+    // the final panorama clears in around the climber like mist lifting
+    vec2 fuv = ((q - uFin.xy) / uFin.z) / vec2(2000.0, 762.0);
+    vec3 fin = texture(uFinale, clamp(fuv, 0.0, 1.0)).rgb;
+    vec2 d = q - uReveal.xy;
+    float n = vnoise(q * 0.006 + uTime * 0.06) * 0.65 + vnoise(q * 0.017 - uTime * 0.04) * 0.35;
+    float edge = length(d) - uReveal.z + (n - 0.5) * uReveal.w * 1.4;
+    float a = 1.0 - smoothstep(-uReveal.w, uReveal.w, edge);
+    col = mix(col, fin, a * uFinAmt);
   }
   o = vec4(col, 1.0);
 }`
@@ -206,7 +224,8 @@ export function createRenderer(canvas, trail) {
     gl.uniform1i(loc, unit)
   }
 
-  // f: { s, tx, ty, shift:[x,y], fill:[s,tx,ty], macro:[x,y,w,h], macroA, head, printA, time }
+  // f: { s, tx, ty, shift:[x,y], fill:[s,tx,ty], macro:[x,y,w,h], macroA, head, printA, time,
+  //      fin:[tx,ty,scale], reveal:[cx,cy,r,feather], finAmt }
   const render = (f) => {
     if (!tex.photo) return
     gl.viewport(0, 0, canvas.width, canvas.height)
@@ -222,6 +241,13 @@ export function createRenderer(canvas, trail) {
     gl.uniform4f(U.uMacro, ...f.macro)
     gl.uniform1f(U.uMacroA, macro)
     gl.uniform1f(U.uTime, f.time)
+    const fin = tex.finale ? f.finAmt || 0 : 0
+    gl.uniform1f(U.uFinAmt, fin)
+    if (fin > 0) {
+      gl.uniform3f(U.uFin, ...f.fin)
+      gl.uniform4f(U.uReveal, ...f.reveal)
+      bindTex(5, 'finale', U.uFinale)
+    }
     bindTex(0, 'photo', U.uPhoto)
     if (macro) {
       bindTex(2, 'snow', U.uSnow)
@@ -252,6 +278,8 @@ export function createRenderer(canvas, trail) {
     render,
     setPhoto: (img) => upload('photo', img),
     setSnow: (img) => upload('snow', img),
+    setFinale: (img) => upload('finale', img),
+    hasFinale: () => !!tex.finale,
     setDetail: (img) => upload('detail', img, { raw: true, wrap: gl.REPEAT }),
     setAtlas: (img) => upload('atlas', img, { raw: true }),
   }

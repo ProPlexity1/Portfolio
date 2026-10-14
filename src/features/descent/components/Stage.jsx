@@ -46,6 +46,7 @@ export default function Stage() {
     let lastU = -1
     const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
     let latest = state
+    let finale_ = {}
 
     // ---- CSS fallback: SVG footprints, revealed by class ----
     const fps = mode === 'css' ? svg.current.querySelectorAll('.fp') : []
@@ -86,8 +87,35 @@ export default function Stage() {
       const fs = Math.max(vw / IMG_W, vh / IMG_H) * 1.04
       const fill = [fs, vw / 2 - (IMG_W / 2) * fs, vh / 2 - (IMG_H / 2) * fs]
 
+      // finale: the panorama clears in around the climber (drawn in WebGL, so it is
+      // smooth and in step with the scroll), pinned to where he stands in the descent
+      // photo, then settles into its full-screen framing
+      const fk = Math.max(vw / FIN.w, vh / FIN.h)
+      const fw = FIN.w * fk
+      const fh = FIN.h * fk
+      const pcx = FIN.x + FIN.cw / 2
+      const pcy = FIN.y + FIN.ch / 2
+      const bx = clamp(vw / 2 - pcx * fk, vw - fw, 0)
+      const by = (vh - fh) / 2
+      const reveal = ramp(u, LAST - 0.55, LAST - 0.18)
+      const finAmt = ramp(u, LAST - 0.55, LAST - 0.45)
+      const settle = 1 - Math.pow(1 - ramp(u, LAST - 0.3, LAST - 0.02), 3)
+      const m0 = (CLIMBER.h * s) / (FIN.ch * fk)
+      const m = Math.exp(Math.log(m0) * (1 - settle))
+      const ox = tx + CLIMBER.cx * s - (bx + pcx * fk * m0)
+      const oy = ty + CLIMBER.cy * s - (by + pcy * fk * m0)
+      const mm = Math.max(1, m)
+      const fx = clamp(bx + ox * (1 - settle), vw - fw * mm, 0) + back[0]
+      const fy = clamp(by + oy * (1 - settle), vh - fh * mm, 0) + back[1]
+      const pxs = fx + pcx * fk * mm
+      const pys = fy + pcy * fk * mm
+      const r0 = FIN.ch * fk * mm * 0.55
+      const radius = r0 + Math.pow(reveal, 1.5) * Math.hypot(vw, vh) * 1.2
+      finale_ = { fin: [fx, fy, fk * mm], reveal: [pxs, pys, radius, 60 + radius * 0.28], finAmt: renderer?.hasFinale() ? finAmt : 0 }
+
       if (renderer) {
         renderer.render({
+          ...finale_,
           s,
           tx,
           ty,
@@ -106,46 +134,18 @@ export default function Stage() {
         set(svg.current, 'opacity', printA.toFixed(3))
       }
 
-      // finale: the panorama fades in with the climber matched to where he stands
-      // in the descent photo, then settles into its full framing
-      const fk = Math.max(vw / FIN.w, vh / FIN.h)
-      const fw = FIN.w * fk
-      const fh = FIN.h * fk
-      const pcx = FIN.x + FIN.cw / 2
-      const pcy = FIN.y + FIN.ch / 2
-      const bx = clamp(vw / 2 - pcx * fk, vw - fw, 0)
-      const by = (vh - fh) / 2
-      const fa = ramp(u, LAST - 0.5, LAST - 0.4)
-      // the panorama opens out from the climber in a soft circle, so the world
-      // grows around him instead of two photos double-exposing
-      const reveal = ramp(u, LAST - 0.5, LAST - 0.2)
-      // stays pinned to the climber until the reveal covers the screen, then settles
-      const settle = 1 - Math.pow(1 - ramp(u, LAST - 0.28, LAST - 0.02), 3)
-      const m0 = (CLIMBER.h * s) / (FIN.ch * fk)
-      const m = Math.exp(Math.log(m0) * (1 - settle))
-      const ox = tx + CLIMBER.cx * s - (bx + pcx * fk * m0)
-      const oy = ty + CLIMBER.cy * s - (by + pcy * fk * m0)
+      // DOM layer on top carries only the name and the climber cutout (same pixels as
+      // the panorama) so the name can pass behind him once the panorama has settled
+      const done = ramp(u, LAST - 0.08, LAST - 0.02)
       set(finale.current, 'width', `${fw.toFixed(1)}px`)
       set(finale.current, 'height', `${fh.toFixed(1)}px`)
-      set(finale.current, 'opacity', fa.toFixed(3))
-      let mask = 'none'
-      if (reveal < 1) {
-        const r = (Math.pow(reveal, 1.6) * 1.15 * Math.hypot(vw, vh) + FIN.ch * fk * 0.6) / m
-        mask = `radial-gradient(circle at ${((pcx / FIN.w) * 100).toFixed(2)}% ${((pcy / FIN.h) * 100).toFixed(2)}%, #000 ${(r * 0.5).toFixed(0)}px, transparent ${r.toFixed(0)}px)`
-      }
-      set(finale.current, 'maskImage', mask)
-      set(finale.current, 'webkitMaskImage', mask)
-      set(finale.current, 'visibility', fa > 0 ? 'visible' : 'hidden')
-      // never let the panorama's own edge come on screen while it settles
-      const mm = Math.max(1, m)
-      const fx = clamp(bx + ox * (1 - settle), vw - fw * mm, 0)
-      const fy = clamp(by + oy * (1 - settle), vh - fh * mm, 0)
-      set(finale.current, 'transform', `translate3d(${(fx + back[0]).toFixed(2)}px,${(fy + back[1]).toFixed(2)}px,0) scale(${mm.toFixed(5)})`)
-      // the name rises in behind him, sized to what is on screen
-      const na = ramp(u, LAST - 0.22, LAST)
+      set(finale.current, 'opacity', (mode === 'css' ? finAmt : done).toFixed(3))
+      set(finale.current, 'visibility', (mode === 'css' ? finAmt : done) > 0 ? 'visible' : 'hidden')
+      set(finale.current, 'transform', `translate3d(${fx.toFixed(2)}px,${fy.toFixed(2)}px,0) scale(${mm.toFixed(5)})`)
+      const na = ramp(u, LAST - 0.06, LAST)
       set(finName.current, 'opacity', na.toFixed(3))
       set(finName.current, 'transform', `translate(-50%,${(-50 + (1 - na) * 18).toFixed(2)}%)`)
-      set(grade.current, 'opacity', (1 - fa).toFixed(3))
+      set(grade.current, 'opacity', (1 - reveal).toFixed(3))
       // reading shade behind section copy: off on the close-up and at base camp
       // which side the copy sits on, blended between stops
       const i = Math.min(LAST - 1, Math.floor(u))
@@ -167,7 +167,8 @@ export default function Stage() {
       set(bankB.current, 'transform', `translate3d(0,${(80 - kb * 180).toFixed(2)}vh,0) scaleX(-1)`)
 
       const introRunning = introStart >= 0 && now - introStart < 3300
-      return introRunning || settling || macroA > 0.01
+      const misting = finale_.finAmt > 0 && reveal < 1
+      return introRunning || settling || macroA > 0.01 || misting
     }
 
     const loop = (now) => {
@@ -239,6 +240,14 @@ export default function Stage() {
           canvas.current?.classList.add('ready')
           stage.resolve()
           request()
+          // the final panorama is not needed until the end of the page
+          loadImage('/media/finale.avif')
+            .catch(() => loadImage('/media/finale.webp'))
+            .then((img) => {
+              renderer.setFinale(img)
+              request()
+            })
+            .catch(() => {})
         })
         .catch(() => {
           state.gl = false
@@ -290,10 +299,12 @@ export default function Stage() {
 
       {/* finale: the panorama, the name, then the climber cut out of it on top */}
       <div ref={finale} className="finale">
-        <picture>
-          <source srcSet="/media/finale.avif" type="image/avif" />
-          <img src="/media/finale.webp" alt="" decoding="async" loading="lazy" className="finale-img" />
-        </picture>
+        {mode === 'css' && (
+          <picture>
+            <source srcSet="/media/finale.avif" type="image/avif" />
+            <img src="/media/finale.webp" alt="" decoding="async" loading="lazy" className="finale-img" />
+          </picture>
+        )}
         <div ref={finName} className="finale-name" style={{ left: `${((FIN.x + FIN.cw / 2) / FIN.w) * 100}%`, top: `${((FIN.y + FIN.ch * 0.3) / FIN.h) * 100}%` }}>
           Ukasha
         </div>
