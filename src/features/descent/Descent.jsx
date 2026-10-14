@@ -89,6 +89,12 @@ function Experience() {
     if (reduced) return
     const lenis = new Lenis({ autoRaf: true, lerp: 0.085, wheelMultiplier: 0.9 })
     setLenis(lenis)
+    // Lenis moves the page inside its own frame; follow it right there so the
+    // stage and the content update together instead of one frame apart
+    lenis.on('scroll', ({ scroll }) => {
+      state.u = uFromScroll(scroll, state.anchors)
+      emit()
+    })
     if (!state.ready) lenis.stop()
     return () => {
       lenis.destroy()

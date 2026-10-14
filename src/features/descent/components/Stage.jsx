@@ -24,8 +24,6 @@ export default function Stage() {
   const world = useRef(null)
   const climber = useRef(null)
   const svg = useRef(null)
-  const head = useRef(null)
-  const flag = useRef(null)
   const dim = useRef(null)
   const name = useRef(null)
   const wisps = useRef(null)
@@ -38,7 +36,9 @@ export default function Stage() {
     let depthPx = null // 75x100 copy of the depth map, for the focus plane
     let raf = 0
     let introStart = -1
-    let introHead = summitDist - 32
+    const INTRO = 18 // the climber's last few steps, pressed in on load
+    let introHead = summitDist - INTRO
+    let lastU = -1
     const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
     let latest = state
 
@@ -66,7 +66,7 @@ export default function Stage() {
       if (st.ready && introStart < 0) introStart = now
       if (introStart >= 0) {
         const k = st.reduced ? 1 : clamp((now - introStart - 350) / 2800)
-        introHead = summitDist - 32 + 32 * (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2)
+        introHead = summitDist - INTRO + INTRO * (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2)
       }
       const dist = Math.max(introHead, headDistance(u, trail.stopLen))
       // close-up fades out before its edges come on screen
@@ -84,24 +84,22 @@ export default function Stage() {
         const a = STOPS[i].cam
         const b = STOPS[i + 1].cam
         let amp = Math.sin(Math.PI * t) * (u >= LAST || i === 0 ? 0 : 1)
-        if (i === LAST - 1) amp *= 1 - ramp(t, 0.15, 0.5)
+        // settle before the climber cutout appears so it lines up exactly
+        if (i === LAST - 1) amp *= 1 - ramp(t, 0.1, 0.35)
         const dx = b.x - a.x
         const dy = b.y - a.y
         const dl = Math.hypot(dx, dy) || 1
-        const look = u < LAST - 0.6 ? 1 : 0
-        const par = [(-dx / dl) * 70 * amp / s - (pointer.x * 16 * look) / s, (-dy / dl) * 70 * amp / s - (pointer.y * 10 * look) / s]
+        const look = 1 - ramp(u, LAST - 1, LAST - 0.75)
+        const par = [(-dx / dl) * 40 * amp / s - (pointer.x * 14 * look) / s, (-dy / dl) * 40 * amp / s - (pointer.y * 9 * look) / s]
         const zi = portrait ? 1 : 0
-        const dolly = 0.1 * amp * Math.sign(Math.log(b.z[zi] / a.z[zi]))
+        const dolly = 0.06 * amp * Math.sign(Math.log(b.z[zi] / a.z[zi]))
         const center = [(vw / 2 - tx) / s, (vh / 2 - ty) / s]
-        const L = [-0.5 + pointer.x * 0.3, -0.6 + pointer.y * 0.3, 0.62]
-        const ll = Math.hypot(...L)
         renderer.render({
           s, tx, ty, par, dolly, center,
           focus: depthAt(center[0], center[1]),
           macro: MACRO,
           macroA,
           head: dist,
-          light: L.map((v) => v / ll),
           time: now / 1000,
         })
       } else if (mode === 'css') {
@@ -109,19 +107,14 @@ export default function Stage() {
         revealCss(dist)
       }
 
-      // SVG overlay (flag, trail head) follows the camera through its viewBox
-      svg.current.setAttribute('viewBox', `${(-tx / s).toFixed(2)} ${(-ty / s).toFixed(2)} ${(vw / s).toFixed(2)} ${(vh / s).toFixed(2)}`)
-      // the flag only reads as a flag once the camera is far enough out
-      set(flag.current, 'opacity', clamp((3 - s) / 0.9).toFixed(3))
-      const [hx, hy] = trail.pointAt(dist)
-      head.current.setAttribute('transform', `translate(${hx.toFixed(1)} ${hy.toFixed(1)}) scale(${(0.6 + clamp((hy - 400) / 1400) * 1.6).toFixed(2)})`)
-      set(head.current, 'opacity', u > 1.04 && u < LAST - 0.04 ? '1' : '0')
+      // fallback footprints follow the camera through the SVG viewBox
+      if (mode === 'css') svg.current.setAttribute('viewBox', `${(-tx / s).toFixed(2)} ${(-ty / s).toFixed(2)} ${(vw / s).toFixed(2)} ${(vh / s).toFixed(2)}`)
 
       // base camp: dim the world, put the name behind the climber
       const tf = `translate3d(${tx.toFixed(2)}px,${ty.toFixed(2)}px,0) scale(${s.toFixed(5)})`
-      const bc = ramp(u, LAST - 0.6, LAST)
+      const bc = ramp(u, LAST - 0.5, LAST)
       set(climber.current, 'transform', tf)
-      set(climber.current, 'visibility', u > LAST - 0.65 ? 'visible' : 'hidden')
+      set(climber.current, 'visibility', u > LAST - 0.6 ? 'visible' : 'hidden')
       set(dim.current, 'opacity', (bc * 0.62).toFixed(3))
       const cx = tx + 735 * s
       const cy = ty + (portrait ? 1180 : 1130) * s
@@ -151,9 +144,12 @@ export default function Stage() {
       if (!raf) raf = requestAnimationFrame(loop)
     }
 
+    // draw in the same frame the scroll changed, so the background never trails the page
     const off = subscribe((st) => {
       latest = st
-      request()
+      if (st.u === lastU && raf) return
+      lastU = st.u
+      if (frame(performance.now())) request()
     })
 
     // ---- WebGL setup ----
@@ -175,7 +171,10 @@ export default function Stage() {
       }
       state.gl = true
       const resize = () => {
-        renderer.resize(canvas.current.clientWidth, canvas.current.clientHeight, Math.min(window.devicePixelRatio || 1, 2))
+        const cw = canvas.current.clientWidth
+        const ch = canvas.current.clientHeight
+        // cap the pixel count so big or dense screens stay smooth
+        renderer.resize(cw, ch, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(3.6e6 / (cw * ch))))
         request()
       }
       ro = new ResizeObserver(resize)
@@ -202,7 +201,8 @@ export default function Stage() {
           depthPx = ctx.getImageData(0, 0, 75, 100).data
         }),
         loadImage('/media/snow-macro.avif').catch(() => loadImage('/media/snow-macro.webp')).then((img) => renderer.setSnow(img)),
-        loadImage('/media/boot-atlas.webp').then((img) => renderer.setAtlas(img)),
+        loadImage('/media/boot-atlas.avif').catch(() => loadImage('/media/boot-atlas.webp')).then((img) => renderer.setAtlas(img)),
+        loadImage('/media/snow-detail.webp').then((img) => renderer.setDetail(img)),
       ])
         .then(() => {
           canvas.current?.classList.add('ready')
@@ -244,28 +244,18 @@ export default function Stage() {
         </div>
       )}
 
-      <svg ref={svg} className="trail" preserveAspectRatio="none" viewBox={`0 0 ${IMG_W} ${IMG_H}`}>
-        <defs>
-          <FootprintSymbol />
-        </defs>
-        <g ref={flag} className="summit-flag" transform="translate(741 421)">
-          <path d="M0 0V-24" stroke="#0b1d22" strokeWidth="1.3" strokeLinecap="round" />
-          <path className="flag-cloth" d="M0-24C4-25 8-22 12-23.5L11-17C7-15.5 4-18.5 0-17.5Z" fill="#6fd1c9" />
-        </g>
-        {mode === 'css' && (
-          <g className="fp-layer">
-            {trail.prints.map((p, i) => (
-              <g key={i} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.r.toFixed(1)}) scale(${(p.k * p.side).toFixed(3)} ${p.k.toFixed(3)})`}>
-                <use href="#boot" className="fp" x="-6" y="-12" width="12" height="24" />
-              </g>
-            ))}
-          </g>
-        )}
-        <g ref={head} opacity="0" className="trail-head">
-          <circle r="9" className="trail-head-ring" />
-          <circle r="3.2" fill="#6fd1c9" />
-        </g>
-      </svg>
+      {mode === 'css' && (
+        <svg ref={svg} className="trail" preserveAspectRatio="none" viewBox={`0 0 ${IMG_W} ${IMG_H}`}>
+          <defs>
+            <FootprintSymbol />
+          </defs>
+          {trail.prints.map((p, i) => (
+            <g key={i} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.r.toFixed(1)}) scale(${(p.k * p.side).toFixed(3)} ${p.k.toFixed(3)})`}>
+              <use href="#boot" className="fp" x="-6" y="-12" width="12" height="24" />
+            </g>
+          ))}
+        </svg>
+      )}
 
       <div ref={dim} className="stage-dim" />
       <div ref={name} className="stage-name">

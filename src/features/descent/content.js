@@ -10,7 +10,7 @@ export const CTA = { contact: 'Start a project', work: 'See the work' }
 // The summit stop is a boot-level close-up of the snow; `fallback` is used when
 // WebGL is unavailable and the close-up can't be drawn.
 export const STOPS = [
-  { id: 'summit', label: 'Summit', alt: 5180, cam: { x: 721, y: 432, z: [40, 45] }, fallback: { x: 740, y: 455, z: [1.9, 2.3] } },
+  { id: 'summit', label: 'Summit', alt: 5180, cam: { x: 725, y: 425, z: [115, 160] }, fallback: { x: 740, y: 455, z: [1.9, 2.3] } },
   { id: 'ridge', label: 'The view', alt: 5150, cam: { x: 740, y: 470, z: [1.9, 2.3] }, rail: false },
   { id: 'about', label: 'About', alt: 4870, cam: { x: 655, y: 590, z: [1.6, 2.6] } },
   { id: 'services', label: 'Services', alt: 4520, cam: { x: 1000, y: 650, z: [1.7, 2.3] } },
