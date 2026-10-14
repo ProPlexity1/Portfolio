@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, ArrowUp, Check } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowRight, ArrowUp, Check, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { SocialIcon } from '../art'
 import { CONTACT_EMAIL, CTA, SOCIALS, steps } from '../content'
 import { flyToStop } from '../scroller'
@@ -25,32 +25,69 @@ const FIELDS = [
   { name: 'details', label: 'Project details', textarea: true, error: 'A sentence or two about the project helps.' },
 ]
 
+const MAX = { name: 100, email: 254, details: 5000 }
+
 function ContactForm() {
   const [errors, setErrors] = useState({})
-  const [sent, setSent] = useState(false)
+  const [state, setState] = useState('idle') // idle | sending | sent | failed | limited
+  const shownAt = useRef(0)
+  useEffect(() => {
+    shownAt.current = Date.now()
+  }, [])
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
+    if (state === 'sending') return
     const form = e.currentTarget
     const next = {}
     FIELDS.forEach((f) => {
       const el = form.elements[f.name]
       if (!el.value.trim() || !el.checkValidity()) next[f.name] = f.error
     })
+    if (!next.details && form.elements.details.value.trim().length < 10) next.details = FIELDS[2].error
     setErrors(next)
     if (Object.keys(next).length) {
       form.elements[Object.keys(next)[0]].focus()
       return
     }
     const data = new FormData(form)
-    const subject = `Project enquiry from ${data.get('name')}`
-    const body = `${data.get('details')}\n\n${data.get('name')}\n${data.get('email')}`
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    setSent(true)
+    setState('sending')
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.get('name'),
+          email: data.get('email'),
+          details: data.get('details'),
+          company: data.get('company'), // hidden trap field, empty for people
+          elapsed: Date.now() - shownAt.current,
+        }),
+      })
+      if (res.ok) {
+        setState('sent')
+        form.reset()
+        return
+      }
+      if (res.status === 422) {
+        const { fields = {} } = await res.json().catch(() => ({}))
+        setErrors(fields)
+        setState('idle')
+        return
+      }
+      setState(res.status === 429 ? 'limited' : 'failed')
+    } catch {
+      setState('failed')
+    }
   }
 
   return (
     <form noValidate onSubmit={submit} className="grid gap-5">
+      {/* off-screen trap: people never see or fill this, bots usually do */}
+      <div className="trap" aria-hidden="true">
+        <label htmlFor="f-company">Company</label>
+        <input id="f-company" name="company" type="text" tabIndex={-1} autoComplete="off" />
+      </div>
       {FIELDS.map((f) => {
         const Field = f.textarea ? 'textarea' : 'input'
         const err = errors[f.name]
@@ -64,6 +101,7 @@ function ContactForm() {
               name={f.name}
               type={f.type}
               rows={f.textarea ? 4 : undefined}
+              maxLength={MAX[f.name]}
               autoComplete={f.autoComplete}
               required
               aria-invalid={!!err}
@@ -81,15 +119,25 @@ function ContactForm() {
           </div>
         )
       })}
-      <button type="submit" className="btn btn-primary mt-1 w-full justify-center sm:w-auto sm:justify-self-start">
-        {CTA.contact}
-        <ArrowRight className="size-4" strokeWidth={2} />
+      <button type="submit" disabled={state === 'sending'} className="btn btn-primary mt-1 w-full justify-center disabled:opacity-70 sm:w-auto sm:justify-self-start">
+        {state === 'sending' ? 'Sending' : CTA.contact}
+        {state === 'sending' ? <Loader2 className="size-4 animate-spin" strokeWidth={2} /> : <ArrowRight className="size-4" strokeWidth={2} />}
       </button>
-      <AnimatePresence>
-        {sent && (
-          <motion.p role="status" className="flex items-center gap-2 text-sm text-glacier" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+      <AnimatePresence mode="wait">
+        {state === 'sent' && (
+          <motion.p key="sent" role="status" className="flex items-center gap-2 text-sm text-glacier" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <Check className="size-4" strokeWidth={2} />
-            Your email app should open with the message ready to send.
+            Got it. I will reply to your email soon.
+          </motion.p>
+        )}
+        {(state === 'failed' || state === 'limited') && (
+          <motion.p key="err" role="alert" className="text-sm text-[#ffb4a8]" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {state === 'limited' ? 'That is a few messages in a short time. ' : 'That did not go through. '}
+            Email me directly at{' '}
+            <a className="link" href={`mailto:${CONTACT_EMAIL}`}>
+              {CONTACT_EMAIL}
+            </a>
+            .
           </motion.p>
         )}
       </AnimatePresence>

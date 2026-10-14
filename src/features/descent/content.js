@@ -1,7 +1,6 @@
 import { BarChart3, Globe2, MessageSquareText, PlugZap, Rocket, ShieldCheck, Target } from 'lucide-react'
 
-// Swap this for your real inbox before going live.
-export const CONTACT_EMAIL = 'ukasha@example.com'
+export const CONTACT_EMAIL = 'ukashaworkmail@gmail.com'
 
 export const CTA = { contact: 'Start a project', work: 'See the work' }
 

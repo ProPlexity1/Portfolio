@@ -647,6 +647,7 @@ main { overflow-x: clip; }
 }
 .link:hover { color: var(--color-glacier); text-decoration-color: currentColor; }
 
+.trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .field {
   width: 100%;
   border-radius: 12px;
@@ -845,6 +846,34 @@ html::-webkit-scrollbar { display: none; }
   font-size: 1.5rem;
   color: var(--color-snow);
 }
+
+/* ---------- admin ---------- */
+.admin-login { min-height: 100dvh; display: grid; place-items: center; padding: 1.5rem; background: var(--color-ink); }
+.admin { max-width: 56rem; margin: 0 auto; padding: 2rem var(--gutter) 4rem; min-height: 100dvh; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.admin-tools { margin: 2rem 0 1.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+.admin-tab {
+  display: inline-flex; align-items: center; gap: 0.5rem; height: 2.4rem; padding: 0 1rem; border-radius: 999px;
+  font-size: 0.9rem; color: rgb(234 242 242 / 0.7); border: 1px solid rgb(234 242 242 / 0.14);
+}
+.admin-tab span { font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-mist); }
+.admin-tab[aria-selected="true"] { color: var(--color-ink); background: var(--color-snow); border-color: var(--color-snow); }
+.admin-tab[aria-selected="true"] span { color: var(--color-deep); }
+.admin-search {
+  display: flex; align-items: center; gap: 0.5rem; height: 2.6rem; padding: 0 0.9rem; border-radius: 12px;
+  min-width: min(100%, 18rem); background: rgb(7 19 24 / 0.7); border: 1px solid rgb(234 242 242 / 0.16);
+}
+.admin-search input { flex: 1; background: none; border: 0; outline: none; color: var(--color-snow); font: inherit; font-size: 0.9rem; }
+.admin-search:focus-within { border-color: var(--color-glacier); }
+.admin-card { padding: 1.4rem; border-radius: 20px; background: rgb(9 24 30 / 0.9); border: 1px solid rgb(234 242 242 / 0.09); }
+.admin-card.is-new { border-color: rgb(111 209 201 / 0.45); box-shadow: inset 3px 0 0 var(--color-glacier); }
+.admin-act {
+  display: inline-flex; align-items: center; gap: 0.45rem; height: 2.2rem; padding: 0 0.85rem; border-radius: 999px;
+  font-size: 0.85rem; color: var(--color-snow); border: 1px solid rgb(234 242 242 / 0.16); transition: border-color 0.2s, color 0.2s;
+}
+.admin-act:hover { border-color: var(--color-glacier); color: var(--color-glacier); }
+.admin-act.is-danger:hover { border-color: #ffb4a8; color: #ffb4a8; }
+.admin-empty { display: grid; justify-items: center; text-align: center; padding: 4rem 1rem; border-radius: 20px; border: 1px dashed rgb(234 242 242 / 0.15); }
 
 /* ---------- preloader ---------- */
 .preloader {
