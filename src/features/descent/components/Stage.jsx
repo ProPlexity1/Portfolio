@@ -25,9 +25,8 @@ export default function Stage() {
   const canvas = useRef(null)
   const world = useRef(null)
   const climber = useRef(null)
-  const glow = useRef(null)
   const svg = useRef(null)
-  const dim = useRef(null)
+  const grade = useRef(null)
   const name = useRef(null)
   const shade = useRef(null)
   const shadeR = useRef(null)
@@ -45,6 +44,8 @@ export default function Stage() {
     let lastU = -1
     const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
     let latest = state
+    let nameW = 0
+    document.fonts?.ready.then(() => (nameW = 0))
 
     // ---- CSS fallback: SVG footprints, revealed by class ----
     const fps = mode === 'css' ? svg.current.querySelectorAll('.fp') : []
@@ -78,21 +79,12 @@ export default function Stage() {
       pointer.y += (pointer.ty - pointer.y) * 0.07
       const settling = Math.abs(pointer.tx - pointer.x) + Math.abs(pointer.ty - pointer.y) > 0.002
 
-      // rigid layers: the scene drifts a little, the climber more, so he sits in front
-      const i = Math.min(LAST - 1, Math.floor(u))
-      const t = clamp(u - i)
-      const a = STOPS[i].cam
-      const b = STOPS[i + 1].cam
-      const dl = Math.hypot(b.x - a.x, b.y - a.y) || 1
-      const travel = i === 0 ? 0 : Math.sin(Math.PI * t) * 26
-      const back = [-pointer.x * 10, -pointer.y * 6]                      // css px
-      const front = [
-        pointer.x * 16 - ((b.x - a.x) / dl) * travel,
-        pointer.y * 10 - ((b.y - a.y) / dl) * travel,
-      ]
-      if (mode === 'css') {
-        back[0] = back[1] = front[0] = front[1] = 0
-      }
+      // the whole scene (photo + climber) drifts together with the pointer; the
+      // climber never moves against the photo, so nothing tears or slides
+      const back = mode === 'css' ? [0, 0] : [-pointer.x * 10, -pointer.y * 6]   // css px
+      // cover framing for the soft fill beside the photo on wide screens
+      const fs = Math.max(vw / IMG_W, vh / IMG_H) * 1.04
+      const fill = [fs, vw / 2 - (IMG_W / 2) * fs, vh / 2 - (IMG_H / 2) * fs]
 
       if (renderer) {
         renderer.render({
@@ -100,6 +92,7 @@ export default function Stage() {
           tx,
           ty,
           shift: [back[0] / s, back[1] / s],
+          fill,
           macro: MACRO,
           macroA,
           head: dist,
@@ -113,27 +106,22 @@ export default function Stage() {
         set(svg.current, 'opacity', printA.toFixed(3))
       }
 
-      // climber: one solid cutout, positioned from the camera, never warped
+      // climber: the same pixels as the photo, locked on top so the name can pass behind him
       const bc = ramp(u, LAST - 0.5, LAST)
-      const pop = 1 + bc * 0.025
-      const cxp = tx + CLIMBER.x * s + front[0]
-      const cyp = ty + CLIMBER.y * s + front[1]
-      const cs = s * pop
-      // grow from the boots so he stays planted on the rock
-      const ox = (CLIMBER.w * s * (pop - 1)) / 2
-      const oy = CLIMBER.h * s * (pop - 1)
-      const ctf = `translate3d(${(cxp - ox).toFixed(2)}px,${(cyp - oy).toFixed(2)}px,0) scale(${cs.toFixed(5)})`
-      set(climber.current, 'transform', ctf)
-      set(glow.current, 'opacity', (bc * 0.55).toFixed(3))
+      set(climber.current, 'transform', `translate3d(${(tx + CLIMBER.x * s + back[0]).toFixed(2)}px,${(ty + CLIMBER.y * s + back[1]).toFixed(2)}px,0) scale(${s.toFixed(5)})`)
 
-      // base camp: dim the scene, put the name behind the climber
-      set(dim.current, 'opacity', (bc * 0.55).toFixed(3))
-      const nx = tx + 735 * s + back[0] * 1.6
-      const ny = ty + (portrait ? 1180 : 1150) * s + back[1]
+      // base camp: the name sits behind the climber, sized to the photo; vignette lifts
+      if (!nameW && name.current.offsetWidth) nameW = name.current.offsetWidth
+      const nk = nameW ? (Math.min(IMG_W * s, vw) * 0.92) / nameW : 1
+      const nx = tx + 735 * s + back[0]
+      const ny = ty + 1150 * s + back[1]
       set(name.current, 'opacity', bc.toFixed(3))
-      set(name.current, 'transform', `translate3d(${nx.toFixed(1)}px,${(ny + (1 - bc) * vh * 0.12).toFixed(1)}px,0) translate(-50%,-50%)`)
+      set(name.current, 'transform', `translate3d(${nx.toFixed(1)}px,${(ny + (1 - bc) * vh * 0.08).toFixed(1)}px,0) scale(${nk.toFixed(4)}) translate(-50%,-50%)`)
+      set(grade.current, 'opacity', (1 - bc).toFixed(3))
       // reading shade behind section copy: off on the close-up and at base camp
       // which side the copy sits on, blended between stops
+      const i = Math.min(LAST - 1, Math.floor(u))
+      const t = clamp(u - i)
       const right = (k) => (STOPS[k].side === 'right' ? 1 : 0)
       const r = right(i) + (right(i + 1) - right(i)) * t
       const shadeA = ramp(u, 0.75, 1.2) * (1 - ramp(u, LAST - 0.6, LAST - 0.2))
@@ -272,16 +260,11 @@ export default function Stage() {
         </svg>
       )}
 
-      <div ref={dim} className="stage-dim" />
       <div ref={name} className="stage-name">
         Ukasha
       </div>
 
       <div ref={climber} className="climber">
-        <picture>
-          <source srcSet="/media/climber-2x.avif" type="image/avif" />
-          <img ref={glow} src="/media/climber-2x.webp" alt="" decoding="async" className="climber-glow" />
-        </picture>
         <picture>
           <source srcSet="/media/climber-2x.avif" type="image/avif" />
           <img src="/media/climber-2x.webp" alt="" decoding="async" className="climber-img" />
@@ -298,7 +281,7 @@ export default function Stage() {
       <img ref={bankA} src="/media/cloud-bank.svg" alt="" className="bank" />
       <img ref={bankB} src="/media/cloud-bank.svg" alt="" className="bank" />
       <Snowfall />
-      <div className="grade" />
+      <div ref={grade} className="grade" />
       <div className="grain" />
     </div>
   )

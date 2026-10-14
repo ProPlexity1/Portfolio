@@ -17,7 +17,7 @@ export const STOPS = [
   { id: 'work', label: 'Work', alt: 4140, cam: { x: 300, y: 840, z: [1.35, 2.0] } },
   { id: 'approach', label: 'Approach', alt: 3790, cam: { x: 1240, y: 1150, z: [1.35, 2.0] }, side: 'right' },
   { id: 'stack', label: 'Stack', alt: 3520, cam: { x: 1260, y: 1520, z: [1.35, 2.0] }, side: 'right' },
-  { id: 'basecamp', label: 'Base camp', alt: 3260, cam: { x: 735, y: 1350, z: [1.0, 1.12], fit: 1060 } },
+  { id: 'basecamp', label: 'Base camp', alt: 3260, cam: { x: 740, y: 1000, z: [1.0, 1.0], fit: 2100 } },
 ]
 
 // Trail through the photo. Points flagged with `stop` sit under that stop's camera.

@@ -9,8 +9,8 @@ import { BlurIn, Rise } from '../ui'
 export function Basecamp() {
   return (
     <section id="basecamp" className="section flex min-h-[110svh] items-end pb-[14svh]">
-      <div className="shell">
-        <Rise as="p" className="max-w-[26ch] font-display text-xl leading-snug text-snow sm:text-2xl lg:ml-[52%]">
+      <div className="shell lg:flex">
+        <Rise as="p" className="max-w-[22ch] font-display text-xl leading-snug text-snow sm:text-2xl lg:ml-auto lg:text-right lg:text-deep lg:[text-shadow:0_1px_24px_rgb(234_242_242/0.7)]">
           Off the screen, this is usually where you will find me.
         </Rise>
       </div>

@@ -16,6 +16,7 @@ uniform vec2 uView;
 uniform float uDpr;
 uniform vec3 uCam;        // scale, tx, ty (css px)
 uniform vec2 uShift;      // rigid parallax offset, world px
+uniform vec3 uFill;       // cover framing for the soft fill beside the photo
 uniform vec4 uMacro;      // close-up rect in world px
 uniform float uMacroA;
 uniform float uTime;
@@ -26,12 +27,15 @@ void main() {
   vec2 q = vec2(gl_FragCoord.x, uView.y * uDpr - gl_FragCoord.y) / uDpr;
   vec2 p0 = (q - uCam.yz) / uCam.x - uShift;
   vec2 uv = p0 / IMG;
-  // past the photo's edge (wide screens at base camp): a soft, dim extension,
-  // feathered into the photo so there is no seam
+  // beside the photo (whole-photo framing on wide screens): the same photo,
+  // blown up to cover and softly blurred, feathered in so there is no seam
   vec2 inside = min(p0, IMG - p0);
-  float f = smoothstep(0.0, 70.0, min(inside.x, inside.y));
+  float f = smoothstep(0.0, 40.0, min(inside.x, inside.y));
   vec3 col = texture(uPhoto, clamp(uv, 0.0, 1.0)).rgb;
-  if (f < 1.0) col = mix(textureLod(uPhoto, clamp(uv, 0.0, 1.0), 7.0).rgb * 0.5, col, f);
+  if (f < 1.0) {
+    vec2 fuv = ((q - uFill.yz) / uFill.x) / IMG;
+    col = mix(textureLod(uPhoto, clamp(fuv, 0.0, 1.0), 5.5).rgb * 0.92, col, f);
+  }
   if (uMacroA > 0.001) {
     vec2 m = (p0 - uMacro.xy) / uMacro.zw;
     if (m.x > 0.0 && m.y > 0.0 && m.x < 1.0 && m.y < 1.0) {
@@ -201,7 +205,7 @@ export function createRenderer(canvas, trail) {
     gl.uniform1i(loc, unit)
   }
 
-  // f: { s, tx, ty, shift:[x,y], macro:[x,y,w,h], macroA, head, printA, time }
+  // f: { s, tx, ty, shift:[x,y], fill:[s,tx,ty], macro:[x,y,w,h], macroA, head, printA, time }
   const render = (f) => {
     if (!tex.photo) return
     gl.viewport(0, 0, canvas.width, canvas.height)
@@ -213,6 +217,7 @@ export function createRenderer(canvas, trail) {
     gl.uniform1f(U.uDpr, dpr)
     gl.uniform3f(U.uCam, f.s, f.tx, f.ty)
     gl.uniform2f(U.uShift, f.shift[0], f.shift[1])
+    gl.uniform3f(U.uFill, ...f.fill)
     gl.uniform4f(U.uMacro, ...f.macro)
     gl.uniform1f(U.uMacroA, macro)
     gl.uniform1f(U.uTime, f.time)
