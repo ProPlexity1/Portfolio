@@ -1,0 +1,2 @@
+// 24x32 blurred preview of the photo, shown while the full image decodes
+export default "data:image/webp;base64,UklGRqgAAABXRUJQVlA4IJwAAACQBQCdASoYACAAPu1mqk2ppaQiMAgBMB2JYwCw7CHiD3i9wv2Zf7WCPFyYn4pJwBp0+TV4AAD+2sX5exNbuGdvKQHe0tWLzN8lZrnCutYTm9t7ZhCQj2lVVjXkm9TemeKne8g7OQzqEXQyzEEpVeyJILPVRG7+MYltTPG4y9Xw/v7Q9WTTGSa+EJRqGAU3zKlxZzVI7WpNbIyegAA="
