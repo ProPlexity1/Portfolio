@@ -1,6 +1,6 @@
 // WebGL2 stage: the generated 3D mountain world (gl/world.js), the summit snow
 // close-up, and every footprint / pole hole multiplied on with baked lighting.
-import { heightShader, TIERS, worldShader } from './world'
+import { BOUNDS, H_MIN, H_RANGE, heightShader, TIERS, worldShader } from './world'
 
 const FULLSCREEN_VS = `#version 300 es
 void main() {
@@ -159,6 +159,7 @@ export function createRenderer(canvas, trail, startTier = 'full') {
   let tier = null
   let world = null
   const heightTex = gl.createTexture()
+  const heightFb = gl.createFramebuffer()
   const buildTier = (next) => {
     if (next === tier) return
     tier = next
@@ -170,8 +171,7 @@ export function createRenderer(canvas, trail, startTier = 'full') {
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v)
     // bake the terrain once into the height texture
     const bake = compile(gl, FULLSCREEN_VS, heightShader(tier))
-    const fb = gl.createFramebuffer()
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, heightFb)
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, heightTex, 0)
     gl.viewport(0, 0, heightW, heightH)
     gl.useProgram(bake.prog)
@@ -179,10 +179,22 @@ export function createRenderer(canvas, trail, startTier = 'full') {
     gl.bindVertexArray(empty)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-    gl.deleteFramebuffer(fb)
     gl.deleteProgram(bake.prog)
   }
   buildTier(startTier)
+
+  // terrain height (m) at world x, z, read back from the baked texture
+  const heightAt = (x, z) => {
+    const { heightW, heightH } = TIERS[tier]
+    const [bx, bz, bw, bh] = BOUNDS
+    const px = Math.min(heightW - 1, Math.max(0, Math.floor(((x - bx) / bw) * heightW)))
+    const pz = Math.min(heightH - 1, Math.max(0, Math.floor(((z - bz) / bh) * heightH)))
+    const out = new Uint8Array(4)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, heightFb)
+    gl.readPixels(px, pz, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, out)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    return H_MIN + ((out[0] * 256 + out[1]) / 65535) * H_RANGE
+  }
 
   // ---- the world is drawn into its own, smaller framebuffer ----
   const worldTex = gl.createTexture()
@@ -287,6 +299,8 @@ export function createRenderer(canvas, trail, startTier = 'full') {
       gl.uniform1f(W.uTime, f.time)
       gl.uniform1f(W.uQuality, f.quality)
       bindTex(0, heightTex, W.uHeight)
+      gl.uniform1f(W.uDetailA, tex.detail ? 1 : 0)
+      if (tex.detail) bindTex(5, tex.detail, W.uDetail)
       gl.bindVertexArray(empty)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
@@ -333,6 +347,7 @@ export function createRenderer(canvas, trail, startTier = 'full') {
     resize,
     setTier: buildTier,
     tier: () => tier,
+    heightAt,
     render,
     // block until the GPU has finished, for frame-time measurement
     finish: () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)),

@@ -3,7 +3,7 @@ import { FootprintSymbol } from '../art'
 import { STOPS } from '../content'
 import { buildTrail, bump, camera, clamp, headDistance, IMG_H, IMG_W, ramp, stage, state, subscribe } from '../engine'
 import { createRenderer, loadImage } from '../gl/renderer'
-import { PERCH, worldCamera } from '../gl/world'
+import { PERCH, PRINT_XZ, setPrintGround, worldCamera } from '../gl/world'
 import lqip from '../lqip'
 import Snowfall from './Snowfall'
 
@@ -13,9 +13,9 @@ const MACRO = [688, 402.8, 70, 58.33]
 // the climber on his rock, cut from the original photo, stood on the lake rock
 // in the 3D world. `height` is the cutout's real-world height in metres.
 const FG = { aspect: 1500 / 1069, personX: 0.488, chestY: 0.3, height: 2.1 }
-// vertical field of view: 50 degrees, opening to 64 on the final view so the
+// vertical field of view: 50 degrees, opening to 60 on the final view so the
 // lake, the valley and the summit all fit around him
-const fovAt = (u, last) => Math.tan(((50 + 14 * Math.min(1, Math.max(0, (u - (last - 0.45)) / 0.45))) * Math.PI) / 360)
+const fovAt = (u, last) => Math.tan(((50 + 10 * Math.min(1, Math.max(0, (u - (last - 0.45)) / 0.45))) * Math.PI) / 360)
 
 const set = (el, key, value) => {
   if (el && el.__last?.[key] !== value) {
@@ -102,9 +102,9 @@ export default function Stage() {
 
       if (renderer) {
         // the 3D camera: path position plus a real look-around from the pointer
-        const cam = worldCamera(Math.max(1, u), 0, portrait)
+        const cam = worldCamera(u, portrait)
         // a gentle look-around: a few metres up high, almost nothing up close
-        const amp = 6 - 5.75 * ramp(u, LAST - 1, LAST)
+        const amp = 6 * ramp(u, 0.6, 1.2) * (1 - 0.96 * ramp(u, LAST - 1, LAST))
         const off = [pointer.x * amp, -pointer.y * amp * 0.5]
         const pos = cam.pos.map((v, k) => v + cam.right[k] * off[0] + cam.up[k] * off[1])
         // adapt resolution from the measured frame interval while moving
@@ -117,6 +117,7 @@ export default function Stage() {
             if (scale <= MIN_SCALE + 1e-3 && renderer.tier() === 'full' && ++floorHits >= 3) {
               // still slow at the lowest resolution: switch to the lite tier
               renderer.setTier('lite')
+              setPrintGround(renderer.heightAt(...PRINT_XZ))
               MAX_SCALE = 0.6
               MIN_SCALE = 0.28
               scale = 0.45
@@ -154,7 +155,7 @@ export default function Stage() {
       // project his feet through the same camera as the world, so distance sets
       // his size and the look-around moves him with true parallax
       let shownFg = false
-      if (view && u > LAST - 1.6) {
+      if (view && u > LAST - 0.6) {
         const v = [PERCH[0] - view.pos[0], PERCH[1] - 0.15 - view.pos[1], PERCH[2] - view.pos[2]]
         const z = v[0] * view.fwd[0] + v[1] * view.fwd[1] + v[2] * view.fwd[2]
         if (z > 0.5) {
@@ -168,8 +169,8 @@ export default function Stage() {
           set(fg.current, 'width', `${fw.toFixed(2)}px`)
           set(fg.current, 'height', `${fh.toFixed(2)}px`)
           set(fg.current, 'transform', `translate3d(${(sx - fw * FG.personX).toFixed(2)}px,${(sy - fh).toFixed(2)}px,0)`)
-          // fades in out of the haze as the camera turns to face him
-          set(fg.current, 'opacity', ramp(u, LAST - 1.5, LAST - 1.15).toFixed(3))
+          // he is behind the camera until it drifts back over him
+          set(fg.current, 'opacity', ramp(u, LAST - 0.6, LAST - 0.45).toFixed(3))
           shownFg = true
           // the name stands behind him once he is close
           if (!nameW && name.current.offsetWidth) nameW = name.current.offsetWidth
@@ -196,11 +197,11 @@ export default function Stage() {
       set(shadeR.current, 'opacity', (shadeA * r).toFixed(3))
       set(grade.current, 'opacity', (1 - 0.6 * ramp(u, LAST - 0.5, LAST)).toFixed(3))
 
-      // weather: a cloud bank hides the hand-off from the close-up to the world
-      set(wisps.current, 'opacity', (ramp(u, 0.55, 0.95) * (1 - ramp(u, 1.1, 1.6))).toFixed(3))
-      set(wisps.current, 'transform', `translate3d(0,${(-(u - 1) * 22).toFixed(2)}vh,0)`)
-      const ka = ramp(u, 0.25, 1.0)
-      set(bank.current, 'opacity', (bump(u, 0.25, 1.0) * 0.95).toFixed(3))
+      // weather: spindrift blows across the hand-off from the close-up to the world
+      set(wisps.current, 'opacity', (ramp(u, 0.3, 0.45) * (1 - ramp(u, 0.6, 0.9)) * 0.35).toFixed(3))
+      set(wisps.current, 'transform', `translate3d(0,${(-(u - 0.5) * 30).toFixed(2)}vh,0)`)
+      const ka = ramp(u, 0.3, 0.7)
+      set(bank.current, 'opacity', (bump(u, 0.32, 0.62) * 0.15).toFixed(3))
       set(bank.current, 'transform', `translate3d(0,${(70 - ka * 170).toFixed(2)}vh,0) scale(${(1.6 - ka * 0.6).toFixed(3)})`)
 
       const introRunning = introStart >= 0 && now - introStart < 3300
@@ -211,6 +212,8 @@ export default function Stage() {
 
     // dev only: time the world render on the GPU (ms per frame) at a given scale
     if (import.meta.env.DEV) {
+      window.__heightAt = (x, z) => renderer?.heightAt(x, z)
+      window.__cam = (u, portrait) => worldCamera(u, portrait)
       window.__benchWorld = (n = 20, sc = 0.5) => {
         if (!renderer) return null
         const keep = [scale, idle]
@@ -278,6 +281,7 @@ export default function Stage() {
         }
       }
       state.gl = true
+      setPrintGround(renderer.heightAt(...PRINT_XZ))
       const resize = () => {
         const cw = canvas.current.clientWidth
         const ch = canvas.current.clientHeight
