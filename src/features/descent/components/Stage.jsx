@@ -3,15 +3,16 @@ import { FootprintSymbol } from '../art'
 import { STOPS } from '../content'
 import { buildTrail, bump, camera, clamp, headDistance, IMG_H, IMG_W, ramp, smoother, stage, state, subscribe } from '../engine'
 import { createRenderer, loadImage } from '../gl/renderer'
-import { worldCamera } from '../gl/world'
+import { ISLAND, worldCamera } from '../gl/world'
 import lqip from '../lqip'
 import Snowfall from './Snowfall'
 
 const LAST = STOPS.length - 1
 // close-up snow patch around the last steps to the summit (photo px, matches snow-macro aspect)
 const MACRO = [688, 402.8, 70, 58.33]
-// final scene foreground: the climber on his rock, cut from the original photo
-const FG = { aspect: 1500 / 1069, personX: 0.488, chestY: 0.3 }
+// the climber on his rock, cut from the original photo, stood on the lake rock
+// in the 3D world. `height` is the cutout's real-world height in metres.
+const FG = { aspect: 1500 / 1069, personX: 0.488, chestY: 0.3, height: 2.1 }
 const FOV = Math.tan((50 * Math.PI) / 360)
 
 const set = (el, key, value) => {
@@ -46,6 +47,7 @@ export default function Stage() {
     let latest = state
     const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
     let nameW = 0
+    let view = null // last world camera, used to place the climber in the scene
     document.fonts?.ready.then(() => (nameW = 0))
 
     // world resolution adapts to the device: drop while frames are slow,
@@ -91,7 +93,10 @@ export default function Stage() {
 
       if (renderer) {
         // the 3D camera: path position plus a real look-around from the pointer
-        const cam = worldCamera(Math.max(1, u))
+        // on wide screens the camera swings a little as it arrives so he ends
+        // up left of centre, leaving room for the name
+        const aim = !portrait ? smoother(ramp(u, LAST - 0.7, LAST)) * Math.atan(((0.1 * vw) / (vh / 2)) * FOV) : 0
+        const cam = worldCamera(Math.max(1, u), -aim)
         const look = 1 - ramp(u, LAST - 0.15, LAST) * 0.4
         const off = [pointer.x * 22 * look, -pointer.y * 12 * look]
         const pos = cam.pos.map((v, k) => v + cam.right[k] * off[0] + cam.up[k] * off[1])
@@ -110,6 +115,7 @@ export default function Stage() {
           }
         }
         lastFrame = now
+        view = { ...cam, pos }
         renderer.render({
           s,
           tx,
@@ -130,30 +136,41 @@ export default function Stage() {
         set(svg.current, 'opacity', printA.toFixed(3))
       }
 
-      // ---- base camp: the real climber on his rock, arriving in the foreground ----
-      const arrive = smoother(ramp(u, LAST - 0.6, LAST))
-      const fh = vh * (portrait ? 0.62 : 0.84)
-      const fw = fh * FG.aspect
-      const px = portrait ? vw * 0.5 : vw * 0.4
-      const fx = px - fw * FG.personX + pointer.x * 16
-      const fy = vh - fh * 0.97 + (1 - arrive) * vh * 0.55 + pointer.y * 8
-      set(fg.current, 'width', `${fw.toFixed(1)}px`)
-      set(fg.current, 'height', `${fh.toFixed(1)}px`)
-      set(fg.current, 'opacity', ramp(u, LAST - 0.6, LAST - 0.35).toFixed(3))
-      set(fg.current, 'visibility', u > LAST - 0.6 ? 'visible' : 'hidden')
-      set(fg.current, 'transform', `translate3d(${fx.toFixed(1)}px,${fy.toFixed(1)}px,0) scale(${(1.1 - 0.1 * arrive).toFixed(4)})`)
-      // the name stands behind him, sized to the screen
-      if (!nameW && name.current.offsetWidth) nameW = name.current.offsetWidth
-      const nwid = Math.min(vw * 0.86, fw * 1.7)
-      const nk = nameW ? Math.min(nwid, vw - (vw >= 1024 ? 200 : vw * 0.04) - vw * 0.04) / nameW : 1
-      const na = ramp(u, LAST - 0.25, LAST)
-      const ny = fy + fh * FG.chestY + (1 - na) * vh * 0.06
-      // centred on him, but never pushed off the edge of the screen
-      const pad = vw >= 1024 ? 200 : vw * 0.04   // keep clear of the rail on desktop
-      const nwFit = Math.min(nwid, vw - pad - vw * 0.04)
-      const nx = clamp(px, nwFit / 2 + pad, vw - nwFit / 2 - vw * 0.04) + pointer.x * 8
-      set(name.current, 'opacity', na.toFixed(3))
-      set(name.current, 'transform', `translate3d(${nx.toFixed(1)}px,${ny.toFixed(1)}px,0) scale(${nk.toFixed(4)}) translate(-50%,-50%)`)
+      // ---- base camp: the climber stands on the lake rock in the 3D world ----
+      // project his feet through the same camera as the world, so distance sets
+      // his size and the look-around moves him with true parallax
+      let shownFg = false
+      if (view && u > LAST - 1.6) {
+        const v = [ISLAND[0] - view.pos[0], 0.25 - view.pos[1], ISLAND[1] - view.pos[2]]
+        const z = v[0] * view.fwd[0] + v[1] * view.fwd[1] + v[2] * view.fwd[2]
+        if (z > 0.5) {
+          const x = v[0] * view.right[0] + v[1] * view.right[1] + v[2] * view.right[2]
+          const y = v[0] * view.up[0] + v[1] * view.up[1] + v[2] * view.up[2]
+          const k = vh / 2 / (z * FOV)            // px per metre at that distance
+          const sx = vw / 2 + x * k
+          const sy = vh / 2 - y * k
+          const fh = FG.height * k
+          const fw = fh * FG.aspect
+          set(fg.current, 'width', `${fw.toFixed(2)}px`)
+          set(fg.current, 'height', `${fh.toFixed(2)}px`)
+          set(fg.current, 'transform', `translate3d(${(sx - fw * FG.personX).toFixed(2)}px,${(sy - fh).toFixed(2)}px,0)`)
+          // fades in out of the haze as the camera turns to face him
+          set(fg.current, 'opacity', ramp(u, LAST - 1.5, LAST - 1.15).toFixed(3))
+          shownFg = true
+          // the name stands behind him once he is close
+          if (!nameW && name.current.offsetWidth) nameW = name.current.offsetWidth
+          const pad = vw >= 1024 ? 200 : vw * 0.04   // keep clear of the rail on desktop
+          const nwid = Math.min(vw * 0.86, fw * 1.7, vw - pad - vw * 0.04)
+          const nk = nameW ? nwid / nameW : 1
+          const na = ramp(u, LAST - 0.12, LAST)
+          const ny = sy - fh + fh * FG.chestY + (1 - na) * vh * 0.06
+          const nx = clamp(sx, nwid / 2 + pad, vw - nwid / 2 - vw * 0.04)
+          set(name.current, 'opacity', na.toFixed(3))
+          set(name.current, 'transform', `translate3d(${nx.toFixed(1)}px,${ny.toFixed(1)}px,0) scale(${nk.toFixed(4)}) translate(-50%,-50%)`)
+        }
+      }
+      set(fg.current, 'visibility', shownFg ? 'visible' : 'hidden')
+      if (!shownFg) set(name.current, 'opacity', '0')
 
       // reading shade behind section copy, on whichever side the copy sits
       const i = Math.min(LAST - 1, Math.floor(u))

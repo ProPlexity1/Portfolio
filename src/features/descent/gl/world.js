@@ -31,6 +31,10 @@ const vec4 BOUNDS = vec4(-4800.0, -3600.0, 9600.0, 14400.0);
 const float H_MIN = -600.0, H_RANGE = 4800.0;
 `
 
+// where the climber's rock sits in the lake (world x, z); shared with the
+// camera path and the DOM layer that places him on it
+export const ISLAND = [105, 6700]
+
 export const HEIGHT_W = 2048
 export const HEIGHT_H = 3072
 
@@ -309,8 +313,10 @@ export const WORLD_KEYS = [
   { pos: [-60, 2250, 2100], yaw: 0.12, pitch: -0.3 },
   { pos: [300, 1180, 2950], yaw: -0.12, pitch: -0.22 },
   { pos: [-160, 560, 4400], yaw: 0.06, pitch: -0.1 },
-  { pos: [140, 170, 5800], yaw: 0.35, pitch: -0.06 },
-  { pos: [0, 30, 7700], yaw: Math.PI, pitch: 0.16 },
+  // turned round over the lake: the climber is a speck on his rock, far ahead
+  { pos: [ISLAND[0] + 30, 24, ISLAND[1] + 240], yaw: Math.PI, pitch: 0.07 },
+  // flown in low over the water until he fills the frame
+  { pos: [ISLAND[0], 1.6, ISLAND[1] + 3.7], yaw: Math.PI, pitch: 0.07 },
 ]
 
 const lerp = (a, b, t) => a + (b - a) * t
@@ -318,22 +324,36 @@ const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10)
 
 // Camera for continuous stop index u (1 .. 7): Catmull-Rom through the stop
 // positions, angles eased between stops.
-export function worldCamera(u) {
+export function worldCamera(u, yawOffset = 0) {
   const n = WORLD_KEYS.length - 1
   const uu = Math.min(n, Math.max(1, u))
   const i = Math.min(n - 1, Math.floor(uu))
   const t = uu - i
   const P = (k) => WORLD_KEYS[Math.min(n, Math.max(1, k))].pos
   const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2)
+  if (i === n - 1) {
+    // the fly-in to the climber: close the distance at a steady rate (each
+    // scroll step multiplies it by the same factor), so he grows evenly
+    const I = [ISLAND[0], 1, ISLAND[1]]
+    const d = (p) => Math.hypot(p[0] - I[0], p[1] - I[1], p[2] - I[2])
+    const dA = d(p1), dB = d(p2)
+    const want = dA * Math.pow(dB / dA, t)
+    const k = (dA - want) / (dA - dB)
+    const pos = [0, 1, 2].map((c) => p1[c] + (p2[c] - p1[c]) * k)
+    return orient(pos, WORLD_KEYS[i], WORLD_KEYS[i + 1], smoother(t), yawOffset)
+  }
   const pos = [0, 1, 2].map((c) => {
     const a = p1[c], b = p2[c]
     const m1 = (p2[c] - p0[c]) * 0.5, m2 = (p3[c] - p1[c]) * 0.5
     const t2 = t * t, t3 = t2 * t
     return (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * b + (t3 - t2) * m2
   })
-  const e = smoother(t)
-  const A = WORLD_KEYS[i], B = WORLD_KEYS[i + 1]
-  const yaw = lerp(A.yaw, B.yaw, e)
+  pos[1] = Math.max(pos[1], 1.2)
+  return orient(pos, WORLD_KEYS[i], WORLD_KEYS[i + 1], smoother(t), yawOffset)
+}
+
+function orient(pos, A, B, e, yawOffset) {
+  const yaw = lerp(A.yaw, B.yaw, e) + yawOffset
   const pitch = lerp(A.pitch, B.pitch, e)
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch)
   const fwd = [sy * cp, sp, cy * cp]
