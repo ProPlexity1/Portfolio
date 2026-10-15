@@ -1,61 +1,41 @@
-// WebGL2 stage: the background plate (climber painted out), the summit snow
+// WebGL2 stage: the generated 3D mountain world (gl/world.js), the summit snow
 // close-up, and every footprint / pole hole multiplied on with baked lighting.
-// The climber is a separate DOM layer so it moves as one piece, never warped.
-import { IMG_H, IMG_W } from '../engine'
+import { HEIGHT_FS, HEIGHT_H, HEIGHT_W, WORLD_FS } from './world'
 
-const PHOTO_VS = `#version 300 es
+const FULLSCREEN_VS = `#version 300 es
 void main() {
   vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
   gl_Position = vec4(p, 0.0, 1.0);
 }`
 
-const PHOTO_FS = `#version 300 es
+// Composite: the world (rendered at reduced resolution) scaled up to the screen,
+// with the close-up snow over it while the camera is down at boot level.
+const COMPOSITE_FS = `#version 300 es
 precision highp float;
-uniform sampler2D uPhoto, uSnow, uDetail, uFinale;
-uniform vec3 uFin;        // panorama placement: tx, ty, css px per panorama px
-uniform vec4 uReveal;     // reveal centre (css px), radius, feather
-uniform float uFinAmt;    // 0..1 panorama strength
+uniform sampler2D uWorld, uSnow, uDetail;
 uniform vec2 uView;
 uniform float uDpr;
-uniform vec3 uCam;        // scale, tx, ty (css px)
-uniform vec2 uShift;      // rigid parallax offset, world px
-uniform vec3 uFill;       // cover framing for the soft fill beside the photo
-uniform vec4 uMacro;      // close-up rect in world px
+uniform float uWorldA;
+uniform vec3 uCam;        // close-up camera: scale, tx, ty (css px)
+uniform vec4 uMacro;      // close-up rect in photo px
 uniform float uMacroA;
 uniform float uTime;
 out vec4 o;
-const vec2 IMG = vec2(${IMG_W}.0, ${IMG_H}.0);
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-float vnoise(vec2 p) {
-  vec2 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
-}
 void main() {
   vec2 q = vec2(gl_FragCoord.x, uView.y * uDpr - gl_FragCoord.y) / uDpr;
-  vec2 p0 = (q - uCam.yz) / uCam.x - uShift;
-  vec2 uv = p0 / IMG;
-  // beside the photo (whole-photo framing on wide screens): the same photo,
-  // blown up to cover and softly blurred, feathered in so there is no seam
-  vec2 inside = min(p0, IMG - p0);
-  float f = smoothstep(0.0, 40.0, min(inside.x, inside.y));
-  vec3 col = texture(uPhoto, clamp(uv, 0.0, 1.0)).rgb;
-  if (f < 1.0) {
-    vec2 fuv = ((q - uFill.yz) / uFill.x) / IMG;
-    vec3 side = textureLod(uPhoto, clamp(fuv, 0.0, 1.0), 5.5).rgb * 0.92;
-    col = mix(side, col, f);
-  }
+  vec3 col = vec3(0.64, 0.72, 0.76);
+  if (uWorldA > 0.0) col = texture(uWorld, gl_FragCoord.xy / (uView * uDpr)).rgb;
   if (uMacroA > 0.001) {
+    vec2 p0 = (q - uCam.yz) / uCam.x;
     vec2 m = (p0 - uMacro.xy) / uMacro.zw;
     if (m.x > 0.0 && m.y > 0.0 && m.x < 1.0 && m.y < 1.0) {
       float e = 1.0 - smoothstep(0.62, 1.0, length((m - 0.5) * 2.0));
       vec3 snow = texture(uSnow, m).rgb;
-      // two octaves of tiling grain keep the surface crisp at any zoom
       vec2 r1 = p0 / 4.6;
       vec2 r2 = mat2(0.8, -0.6, 0.6, 0.8) * p0 / 15.0;
       snow *= mix(vec3(1.0), texture(uDetail, r1).rgb * 2.0, 0.6) * 1.05;
       snow *= mix(vec3(1.0), texture(uDetail, r2).rgb * 2.0, 0.45);
-      // glints: rare grains catch the light, twinkling as the camera moves
       vec2 g = p0 * 18.0;
       vec2 id = floor(g);
       float n = hash(id);
@@ -65,16 +45,6 @@ void main() {
       snow += step(0.985, n) * smoothstep(0.09, 0.0, d) * tw * clamp(uCam.x / 40.0, 0.0, 1.0);
       col = mix(col, snow, uMacroA * e);
     }
-  }
-  if (uFinAmt > 0.001) {
-    // the final panorama clears in around the climber like mist lifting
-    vec2 fuv = ((q - uFin.xy) / uFin.z) / vec2(2000.0, 762.0);
-    vec3 fin = texture(uFinale, clamp(fuv, 0.0, 1.0)).rgb;
-    vec2 d = q - uReveal.xy;
-    float n = vnoise(q * 0.006 + uTime * 0.06) * 0.65 + vnoise(q * 0.017 - uTime * 0.04) * 0.35;
-    float edge = length(d) - uReveal.z + (n - 0.5) * uReveal.w * 1.4;
-    float a = 1.0 - smoothstep(-uReveal.w, uReveal.w, edge);
-    col = mix(col, fin, a * uFinAmt);
   }
   o = vec4(col, 1.0);
 }`
@@ -89,7 +59,6 @@ layout(location = 4) in float aD;
 layout(location = 5) in float aKind;
 uniform vec2 uView;
 uniform vec3 uCam;
-uniform vec2 uShift;
 uniform float uHead;
 uniform float uPressLen;
 out vec2 vUv;
@@ -101,7 +70,7 @@ void main() {
   vec2 lp = aCorner * half_ * abs(aScale) * (1.0 + (1.0 - press) * 0.06);
   float c = cos(aRot), s = sin(aRot);
   vec2 w = aPos + vec2(c * lp.x - s * lp.y, s * lp.x + c * lp.y);
-  vec2 q = (w + uShift) * uCam.x + uCam.yz;
+  vec2 q = w * uCam.x + uCam.yz;
   gl_Position = vec4(q.x / uView.x * 2.0 - 1.0, 1.0 - q.y / uView.y * 2.0, 0.0, 1.0);
   vec2 uv = aCorner * 0.5 + 0.5;
   if (aKind > 0.5) vUv = vec2((1536.0 + uv.x * 256.0) / AW, uv.y * 256.0 / AH);
@@ -155,16 +124,54 @@ export function createRenderer(canvas, trail) {
   if (!gl) throw new Error('webgl2 unavailable')
   const aniso = gl.getExtension('EXT_texture_filter_anisotropic')
 
-  const photo = compile(gl, PHOTO_VS, PHOTO_FS)
+  const composite = compile(gl, FULLSCREEN_VS, COMPOSITE_FS)
+  const world = compile(gl, FULLSCREEN_VS, WORLD_FS)
   const print = compile(gl, PRINT_VS, PRINT_FS)
+  const empty = gl.createVertexArray()
 
-  // instances: one per footprint plus a pole hole beside every other step
+  // ---- bake the terrain once into a height texture ----
+  const heightTex = gl.createTexture()
+  gl.bindTexture(gl.TEXTURE_2D, heightTex)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, HEIGHT_W, HEIGHT_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v)
+  {
+    const bake = compile(gl, FULLSCREEN_VS, HEIGHT_FS)
+    const fb = gl.createFramebuffer()
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, heightTex, 0)
+    gl.viewport(0, 0, HEIGHT_W, HEIGHT_H)
+    gl.useProgram(bake.prog)
+    gl.uniform2f(bake.u.uSize, HEIGHT_W, HEIGHT_H)
+    gl.bindVertexArray(empty)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.deleteFramebuffer(fb)
+    gl.deleteProgram(bake.prog)
+  }
+
+  // ---- the world is drawn into its own, smaller framebuffer ----
+  const worldTex = gl.createTexture()
+  const worldFb = gl.createFramebuffer()
+  let worldW = 0
+  let worldH = 0
+  const sizeWorld = (wpx, hpx) => {
+    if (wpx === worldW && hpx === worldH) return
+    worldW = wpx
+    worldH = hpx
+    gl.bindTexture(gl.TEXTURE_2D, worldTex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, wpx, hpx, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, worldFb)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, worldTex, 0)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  }
+
+  // ---- footprint instances: one per print plus a pole hole every other step ----
   const rows = []
   trail.prints.forEach((p, i) => {
     const rot = (p.r * Math.PI) / 180
     rows.push(p.x, p.y, rot, p.k * p.side, p.k, p.d, 0)
     if (i % 2 === 0) {
-      // the basket lands ahead and to the outside of the step
       const ox = 7.2 * p.side
       const oy = -5.5
       const hx = p.x + (Math.cos(rot) * ox - Math.sin(rot) * oy) * p.k
@@ -187,15 +194,14 @@ export function createRenderer(canvas, trail) {
     gl.vertexAttribDivisor(loc, 1)
   }
   gl.bindVertexArray(null)
-  const empty = gl.createVertexArray()
 
   const tex = {}
-  const upload = (name, img, { format = gl.RGBA, internal = gl.RGBA8, mip = true, raw = false, wrap = gl.CLAMP_TO_EDGE } = {}) => {
+  const upload = (name, img, { mip = true, raw = false, wrap = gl.CLAMP_TO_EDGE } = {}) => {
     const t = tex[name] || gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, t)
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, raw ? gl.NONE : gl.BROWSER_DEFAULT_WEBGL)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
-    gl.texImage2D(gl.TEXTURE_2D, 0, internal, format, gl.UNSIGNED_BYTE, img)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, img)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
@@ -218,40 +224,55 @@ export function createRenderer(canvas, trail) {
     canvas.height = Math.round(cssH * ratio)
   }
 
-  const bindTex = (unit, name, loc) => {
+  const bindTex = (unit, t, loc) => {
     gl.activeTexture(gl.TEXTURE0 + unit)
-    gl.bindTexture(gl.TEXTURE_2D, tex[name])
+    gl.bindTexture(gl.TEXTURE_2D, t)
     gl.uniform1i(loc, unit)
   }
 
-  // f: { s, tx, ty, shift:[x,y], fill:[s,tx,ty], macro:[x,y,w,h], macroA, head, printA, time,
-  //      fin:[tx,ty,scale], reveal:[cx,cy,r,feather], finAmt }
+  // f: { s, tx, ty, macro, macroA, head, printA, time,
+  //      world: { pos, fwd, right, up } | null, worldScale, quality }
   const render = (f) => {
-    if (!tex.photo) return
+    const showWorld = !!f.world && f.macroA < 0.999
+    if (showWorld) {
+      const wpx = Math.max(64, Math.round(canvas.width * f.worldScale))
+      const hpx = Math.max(64, Math.round(canvas.height * f.worldScale))
+      sizeWorld(wpx, hpx)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, worldFb)
+      gl.viewport(0, 0, wpx, hpx)
+      gl.disable(gl.BLEND)
+      gl.useProgram(world.prog)
+      const W = world.u
+      gl.uniform2f(W.uRes, wpx, hpx)
+      gl.uniform3f(W.uCamPos, ...f.world.pos)
+      gl.uniform3f(W.uCamRight, ...f.world.right)
+      gl.uniform3f(W.uCamUp, ...f.world.up)
+      gl.uniform3f(W.uCamFwd, ...f.world.fwd)
+      gl.uniform1f(W.uFov, f.world.fov)
+      gl.uniform1f(W.uTime, f.time)
+      gl.uniform1f(W.uQuality, f.quality)
+      bindTex(0, heightTex, W.uHeight)
+      gl.bindVertexArray(empty)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    }
+
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.disable(gl.BLEND)
-    gl.useProgram(photo.prog)
-    const U = photo.u
+    gl.useProgram(composite.prog)
+    const U = composite.u
     const macro = tex.snow && tex.detail ? f.macroA : 0
     gl.uniform2f(U.uView, w, h)
     gl.uniform1f(U.uDpr, dpr)
+    gl.uniform1f(U.uWorldA, showWorld ? 1 : 0)
     gl.uniform3f(U.uCam, f.s, f.tx, f.ty)
-    gl.uniform2f(U.uShift, f.shift[0], f.shift[1])
-    gl.uniform3f(U.uFill, ...f.fill)
     gl.uniform4f(U.uMacro, ...f.macro)
     gl.uniform1f(U.uMacroA, macro)
     gl.uniform1f(U.uTime, f.time)
-    const fin = tex.finale ? f.finAmt || 0 : 0
-    gl.uniform1f(U.uFinAmt, fin)
-    if (fin > 0) {
-      gl.uniform3f(U.uFin, ...f.fin)
-      gl.uniform4f(U.uReveal, ...f.reveal)
-      bindTex(5, 'finale', U.uFinale)
-    }
-    bindTex(0, 'photo', U.uPhoto)
+    if (showWorld) bindTex(1, worldTex, U.uWorld)
     if (macro) {
-      bindTex(2, 'snow', U.uSnow)
-      bindTex(4, 'detail', U.uDetail)
+      bindTex(2, tex.snow, U.uSnow)
+      bindTex(3, tex.detail, U.uDetail)
     }
     gl.bindVertexArray(empty)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
@@ -263,11 +284,10 @@ export function createRenderer(canvas, trail) {
     const P = print.u
     gl.uniform2f(P.uView, w, h)
     gl.uniform3f(P.uCam, f.s, f.tx, f.ty)
-    gl.uniform2f(P.uShift, f.shift[0], f.shift[1])
     gl.uniform1f(P.uHead, f.head)
-    gl.uniform1f(P.uPrintA, f.printA)
     gl.uniform1f(P.uPressLen, 4.5)
-    bindTex(3, 'atlas', P.uAtlas)
+    gl.uniform1f(P.uPrintA, f.printA)
+    bindTex(4, tex.atlas, P.uAtlas)
     gl.bindVertexArray(vao)
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count)
     gl.bindVertexArray(null)
@@ -276,11 +296,11 @@ export function createRenderer(canvas, trail) {
   return {
     resize,
     render,
-    setPhoto: (img) => upload('photo', img),
+    // block until the GPU has finished, for frame-time measurement
+    finish: () => gl.finish(),
     setSnow: (img) => upload('snow', img),
-    setFinale: (img) => upload('finale', img),
-    hasFinale: () => !!tex.finale,
     setDetail: (img) => upload('detail', img, { raw: true, wrap: gl.REPEAT }),
     setAtlas: (img) => upload('atlas', img, { raw: true }),
   }
 }
+

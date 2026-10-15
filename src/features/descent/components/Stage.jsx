@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FootprintSymbol } from '../art'
 import { STOPS } from '../content'
-import { buildTrail, bump, camera, clamp, headDistance, IMG_H, IMG_W, ramp, stage, state, subscribe } from '../engine'
+import { buildTrail, bump, camera, clamp, headDistance, IMG_H, IMG_W, ramp, smoother, stage, state, subscribe } from '../engine'
 import { createRenderer, loadImage } from '../gl/renderer'
+import { worldCamera } from '../gl/world'
 import lqip from '../lqip'
 import Snowfall from './Snowfall'
 
 const LAST = STOPS.length - 1
-// close-up snow patch around the last steps to the summit (world px, matches snow-macro aspect)
+// close-up snow patch around the last steps to the summit (photo px, matches snow-macro aspect)
 const MACRO = [688, 402.8, 70, 58.33]
-// the climber in the descent photo (world px)
-const CLIMBER = { cx: 735, cy: 1390, h: 931 }
-// the final panorama and the climber inside it (its own pixels)
-const FIN = { w: 2000, h: 762, x: 952.3, y: 412.7, cw: 150.7, ch: 306.3 }
+// final scene foreground: the climber on his rock, cut from the original photo
+const FG = { aspect: 1500 / 1069, personX: 0.488, chestY: 0.3 }
+const FOV = Math.tan((50 * Math.PI) / 360)
 
 const set = (el, key, value) => {
   if (el && el.__last?.[key] !== value) {
@@ -26,15 +26,14 @@ export default function Stage() {
   const [mode, setMode] = useState('gl')
   const canvas = useRef(null)
   const world = useRef(null)
-  const finale = useRef(null)
-  const finName = useRef(null)
   const svg = useRef(null)
-  const grade = useRef(null)
+  const fg = useRef(null)
+  const name = useRef(null)
   const shade = useRef(null)
   const shadeR = useRef(null)
+  const grade = useRef(null)
   const wisps = useRef(null)
-  const bankA = useRef(null)
-  const bankB = useRef(null)
+  const bank = useRef(null)
 
   useEffect(() => {
     const summitDist = trail.stopLen[0]
@@ -44,9 +43,20 @@ export default function Stage() {
     const INTRO = 18 // the climber's last few steps, pressed in on load
     let introHead = summitDist - INTRO
     let lastU = -1
-    const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
     let latest = state
-    let finale_ = {}
+    const pointer = { x: 0, y: 0, tx: 0, ty: 0 }
+    let nameW = 0
+    document.fonts?.ready.then(() => (nameW = 0))
+
+    // world resolution adapts to the device: drop while frames are slow,
+    // climb back when there is headroom, and sharpen once scrolling stops
+    const coarse = matchMedia('(pointer: coarse)').matches
+    const MAX_SCALE = coarse ? 0.6 : 0.85
+    let scale = coarse ? 0.45 : 0.62
+    let lastFrame = 0
+    let slow = 0
+    let idleTimer = 0
+    let idle = false
 
     // ---- CSS fallback: SVG footprints, revealed by class ----
     const fps = mode === 'css' ? svg.current.querySelectorAll('.fp') : []
@@ -72,60 +82,44 @@ export default function Stage() {
       // close-up fades out before its edges come on screen
       const cover = Math.min((MACRO[2] * s) / vw, (MACRO[3] * s) / vh)
       const macroA = mode === 'gl' ? clamp((cover - 0.6) / 0.6) : 0
-      // footprints only live in the snow close-up; on the photo they read as fake
       const printA = mode === 'gl' ? clamp(macroA * 1.6) : 1 - ramp(u, 0.1, 0.5)
 
-      // pointer eases toward its target
       pointer.x += (pointer.tx - pointer.x) * 0.07
       pointer.y += (pointer.ty - pointer.y) * 0.07
       const settling = Math.abs(pointer.tx - pointer.x) + Math.abs(pointer.ty - pointer.y) > 0.002
 
-      // the whole scene (photo + climber) drifts together with the pointer; the
-      // climber never moves against the photo, so nothing tears or slides
-      const back = mode === 'css' ? [0, 0] : [-pointer.x * 10, -pointer.y * 6]   // css px
-      // cover framing for the soft fill beside the photo on wide screens
-      const fs = Math.max(vw / IMG_W, vh / IMG_H) * 1.04
-      const fill = [fs, vw / 2 - (IMG_W / 2) * fs, vh / 2 - (IMG_H / 2) * fs]
-
-      // finale: the panorama clears in around the climber (drawn in WebGL, so it is
-      // smooth and in step with the scroll), pinned to where he stands in the descent
-      // photo, then settles into its full-screen framing
-      const fk = Math.max(vw / FIN.w, vh / FIN.h)
-      const fw = FIN.w * fk
-      const fh = FIN.h * fk
-      const pcx = FIN.x + FIN.cw / 2
-      const pcy = FIN.y + FIN.ch / 2
-      const bx = clamp(vw / 2 - pcx * fk, vw - fw, 0)
-      const by = (vh - fh) / 2
-      const reveal = ramp(u, LAST - 0.55, LAST - 0.18)
-      const finAmt = ramp(u, LAST - 0.55, LAST - 0.45)
-      const settle = 1 - Math.pow(1 - ramp(u, LAST - 0.3, LAST - 0.02), 3)
-      const m0 = (CLIMBER.h * s) / (FIN.ch * fk)
-      const m = Math.exp(Math.log(m0) * (1 - settle))
-      const ox = tx + CLIMBER.cx * s - (bx + pcx * fk * m0)
-      const oy = ty + CLIMBER.cy * s - (by + pcy * fk * m0)
-      const mm = Math.max(1, m)
-      const fx = clamp(bx + ox * (1 - settle), vw - fw * mm, 0) + back[0]
-      const fy = clamp(by + oy * (1 - settle), vh - fh * mm, 0) + back[1]
-      const pxs = fx + pcx * fk * mm
-      const pys = fy + pcy * fk * mm
-      const r0 = FIN.ch * fk * mm * 0.55
-      const radius = r0 + Math.pow(reveal, 1.5) * Math.hypot(vw, vh) * 1.2
-      finale_ = { fin: [fx, fy, fk * mm], reveal: [pxs, pys, radius, 60 + radius * 0.28], finAmt: renderer?.hasFinale() ? finAmt : 0 }
-
       if (renderer) {
+        // the 3D camera: path position plus a real look-around from the pointer
+        const cam = worldCamera(Math.max(1, u))
+        const look = 1 - ramp(u, LAST - 0.15, LAST) * 0.4
+        const off = [pointer.x * 22 * look, -pointer.y * 12 * look]
+        const pos = cam.pos.map((v, k) => v + cam.right[k] * off[0] + cam.up[k] * off[1])
+        // adapt resolution from the measured frame interval while moving
+        if (lastFrame && !idle) {
+          const dt = now - lastFrame
+          if (dt > 26) slow = Math.min(slow + 1, 6)
+          else if (dt < 15) slow = Math.max(slow - 1, -12)
+          if (slow >= 4) {
+            scale = Math.max(0.28, scale * 0.85)
+            slow = 0
+          } else if (slow <= -12) {
+            scale = Math.min(MAX_SCALE, scale * 1.06)
+            slow = 0
+          }
+        }
+        lastFrame = now
         renderer.render({
-          ...finale_,
           s,
           tx,
           ty,
-          shift: [back[0] / s, back[1] / s],
-          fill,
           macro: MACRO,
           macroA,
           head: dist,
           printA,
           time: now / 1000,
+          world: { ...cam, pos, fov: FOV },
+          worldScale: idle ? MAX_SCALE : scale,
+          quality: idle ? 1 : 0.5,
         })
       } else if (mode === 'css') {
         set(world.current, 'transform', `translate3d(${tx.toFixed(2)}px,${ty.toFixed(2)}px,0) scale(${s.toFixed(5)})`)
@@ -134,20 +128,32 @@ export default function Stage() {
         set(svg.current, 'opacity', printA.toFixed(3))
       }
 
-      // DOM layer on top carries only the name and the climber cutout (same pixels as
-      // the panorama) so the name can pass behind him once the panorama has settled
-      const done = ramp(u, LAST - 0.08, LAST - 0.02)
-      set(finale.current, 'width', `${fw.toFixed(1)}px`)
-      set(finale.current, 'height', `${fh.toFixed(1)}px`)
-      set(finale.current, 'opacity', (mode === 'css' ? finAmt : done).toFixed(3))
-      set(finale.current, 'visibility', (mode === 'css' ? finAmt : done) > 0 ? 'visible' : 'hidden')
-      set(finale.current, 'transform', `translate3d(${fx.toFixed(2)}px,${fy.toFixed(2)}px,0) scale(${mm.toFixed(5)})`)
-      const na = ramp(u, LAST - 0.06, LAST)
-      set(finName.current, 'opacity', na.toFixed(3))
-      set(finName.current, 'transform', `translate(-50%,${(-50 + (1 - na) * 18).toFixed(2)}%)`)
-      set(grade.current, 'opacity', (1 - reveal).toFixed(3))
-      // reading shade behind section copy: off on the close-up and at base camp
-      // which side the copy sits on, blended between stops
+      // ---- base camp: the real climber on his rock, arriving in the foreground ----
+      const arrive = smoother(ramp(u, LAST - 0.6, LAST))
+      const fh = vh * (portrait ? 0.62 : 0.84)
+      const fw = fh * FG.aspect
+      const px = portrait ? vw * 0.5 : vw * 0.4
+      const fx = px - fw * FG.personX + pointer.x * 16
+      const fy = vh - fh * 0.97 + (1 - arrive) * vh * 0.55 + pointer.y * 8
+      set(fg.current, 'width', `${fw.toFixed(1)}px`)
+      set(fg.current, 'height', `${fh.toFixed(1)}px`)
+      set(fg.current, 'opacity', ramp(u, LAST - 0.6, LAST - 0.35).toFixed(3))
+      set(fg.current, 'visibility', u > LAST - 0.6 ? 'visible' : 'hidden')
+      set(fg.current, 'transform', `translate3d(${fx.toFixed(1)}px,${fy.toFixed(1)}px,0) scale(${(1.1 - 0.1 * arrive).toFixed(4)})`)
+      // the name stands behind him, sized to the screen
+      if (!nameW && name.current.offsetWidth) nameW = name.current.offsetWidth
+      const nwid = Math.min(vw * 0.86, fw * 1.7)
+      const nk = nameW ? Math.min(nwid, vw - (vw >= 1024 ? 200 : vw * 0.04) - vw * 0.04) / nameW : 1
+      const na = ramp(u, LAST - 0.25, LAST)
+      const ny = fy + fh * FG.chestY + (1 - na) * vh * 0.06
+      // centred on him, but never pushed off the edge of the screen
+      const pad = vw >= 1024 ? 200 : vw * 0.04   // keep clear of the rail on desktop
+      const nwFit = Math.min(nwid, vw - pad - vw * 0.04)
+      const nx = clamp(px, nwFit / 2 + pad, vw - nwFit / 2 - vw * 0.04) + pointer.x * 8
+      set(name.current, 'opacity', na.toFixed(3))
+      set(name.current, 'transform', `translate3d(${nx.toFixed(1)}px,${ny.toFixed(1)}px,0) scale(${nk.toFixed(4)}) translate(-50%,-50%)`)
+
+      // reading shade behind section copy, on whichever side the copy sits
       const i = Math.min(LAST - 1, Math.floor(u))
       const t = clamp(u - i)
       const right = (k) => (STOPS[k].side === 'right' ? 1 : 0)
@@ -155,20 +161,17 @@ export default function Stage() {
       const shadeA = ramp(u, 0.75, 1.2) * (1 - ramp(u, LAST - 0.6, LAST - 0.2))
       set(shade.current, 'opacity', (shadeA * (1 - r)).toFixed(3))
       set(shadeR.current, 'opacity', (shadeA * r).toFixed(3))
+      set(grade.current, 'opacity', (1 - 0.6 * ramp(u, LAST - 0.5, LAST)).toFixed(3))
 
-      // weather: the first cloud bank hides the hand-off from close-up to photo
-      set(wisps.current, 'opacity', (ramp(u, 0.55, 0.95) * (1 - ramp(u, 1.2, 2.1))).toFixed(3))
+      // weather: a cloud bank hides the hand-off from the close-up to the world
+      set(wisps.current, 'opacity', (ramp(u, 0.55, 0.95) * (1 - ramp(u, 1.1, 1.6))).toFixed(3))
       set(wisps.current, 'transform', `translate3d(0,${(-(u - 1) * 22).toFixed(2)}vh,0)`)
       const ka = ramp(u, 0.25, 1.0)
-      set(bankA.current, 'opacity', (bump(u, 0.25, 1.0) * 0.95).toFixed(3))
-      set(bankA.current, 'transform', `translate3d(0,${(70 - ka * 170).toFixed(2)}vh,0) scale(${(1.6 - ka * 0.6).toFixed(3)})`)
-      const kb = ramp(u, 1.25, 2.2)
-      set(bankB.current, 'opacity', (bump(u, 1.25, 2.2) * 0.78).toFixed(3))
-      set(bankB.current, 'transform', `translate3d(0,${(80 - kb * 180).toFixed(2)}vh,0) scaleX(-1)`)
+      set(bank.current, 'opacity', (bump(u, 0.25, 1.0) * 0.95).toFixed(3))
+      set(bank.current, 'transform', `translate3d(0,${(70 - ka * 170).toFixed(2)}vh,0) scale(${(1.6 - ka * 0.6).toFixed(3)})`)
 
       const introRunning = introStart >= 0 && now - introStart < 3300
-      const misting = finale_.finAmt > 0 && reveal < 1
-      return introRunning || settling || macroA > 0.01 || misting
+      return introRunning || settling || macroA > 0.01
     }
 
     const loop = (now) => {
@@ -178,12 +181,23 @@ export default function Stage() {
     const request = () => {
       if (!raf) raf = requestAnimationFrame(loop)
     }
+    // once scrolling stops, draw one sharper frame
+    const markMoving = () => {
+      idle = false
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        idle = true
+        lastFrame = 0
+        request()
+      }, 220)
+    }
 
     // draw in the same frame the scroll changed, so the background never trails the page
     const off = subscribe((st) => {
       latest = st
       if (st.u === lastU && raf) return
       lastU = st.u
+      markMoving()
       if (frame(performance.now())) request()
     })
 
@@ -191,6 +205,7 @@ export default function Stage() {
     const onPointer = (e) => {
       pointer.tx = (e.clientX / window.innerWidth) * 2 - 1
       pointer.ty = (e.clientY / window.innerHeight) * 2 - 1
+      markMoving()
       request()
     }
     if (matchMedia('(hover: hover) and (pointer: fine)').matches && !state.reduced) {
@@ -200,7 +215,8 @@ export default function Stage() {
     if (mode === 'gl') {
       try {
         renderer = createRenderer(canvas.current, trail)
-      } catch {
+      } catch (e) {
+        console.warn('[stage] falling back to the photo:', e)
         renderer = null
       }
       if (!renderer) {
@@ -227,11 +243,7 @@ export default function Stage() {
         setMode('css')
       })
 
-      const big = Math.max(window.innerWidth, window.innerHeight) * Math.min(window.devicePixelRatio || 1, 2) > 1800
       Promise.all([
-        loadImage(big ? '/media/plate-3000.avif' : '/media/plate-2048.avif')
-          .catch(() => loadImage('/media/descent-1500.webp'))
-          .then((img) => renderer.setPhoto(img)),
         loadImage('/media/snow-macro.avif').catch(() => loadImage('/media/snow-macro.webp')).then((img) => renderer.setSnow(img)),
         loadImage('/media/boot-atlas.avif').catch(() => loadImage('/media/boot-atlas.webp')).then((img) => renderer.setAtlas(img)),
         loadImage('/media/snow-detail.webp').then((img) => renderer.setDetail(img)),
@@ -240,14 +252,6 @@ export default function Stage() {
           canvas.current?.classList.add('ready')
           stage.resolve()
           request()
-          // the final panorama is not needed until the end of the page
-          loadImage('/media/finale.avif')
-            .catch(() => loadImage('/media/finale.webp'))
-            .then((img) => {
-              renderer.setFinale(img)
-              request()
-            })
-            .catch(() => {})
         })
         .catch(() => {
           state.gl = false
@@ -262,6 +266,7 @@ export default function Stage() {
       off()
       ro?.disconnect()
       cancelAnimationFrame(raf)
+      clearTimeout(idleTimer)
       window.removeEventListener('pointermove', onPointer)
     }
   }, [trail, mode])
@@ -297,29 +302,13 @@ export default function Stage() {
         </svg>
       )}
 
-      {/* finale: the panorama, the name, then the climber cut out of it on top */}
-      <div ref={finale} className="finale">
-        {mode === 'css' && (
-          <picture>
-            <source srcSet="/media/finale.avif" type="image/avif" />
-            <img src="/media/finale.webp" alt="" decoding="async" loading="lazy" className="finale-img" />
-          </picture>
-        )}
-        <div ref={finName} className="finale-name" style={{ left: `${((FIN.x + FIN.cw / 2) / FIN.w) * 100}%`, top: `${((FIN.y + FIN.ch * 0.3) / FIN.h) * 100}%` }}>
-          Ukasha
-        </div>
-        <picture>
-          <source srcSet="/media/finale-climber.avif" type="image/avif" />
-          <img
-            src="/media/finale-climber.webp"
-            alt=""
-            decoding="async"
-            loading="lazy"
-            className="finale-climber"
-            style={{ left: `${(FIN.x / FIN.w) * 100}%`, top: `${(FIN.y / FIN.h) * 100}%`, width: `${(FIN.cw / FIN.w) * 100}%`, height: `${(FIN.ch / FIN.h) * 100}%` }}
-          />
-        </picture>
+      <div ref={name} className="finale-name">
+        Ukasha
       </div>
+      <picture>
+        <source srcSet="/media/basecamp-fg.avif" type="image/avif" />
+        <img ref={fg} src="/media/basecamp-fg.webp" alt="" decoding="async" loading="lazy" className="basecamp-fg" />
+      </picture>
 
       <div ref={shade} className="stage-shade" />
       <div ref={shadeR} className="stage-shade stage-shade-right" />
@@ -328,8 +317,7 @@ export default function Stage() {
         <img src="/media/cloud-wisp.svg" alt="" className="wisp wisp-a" />
         <img src="/media/cloud-wisp.svg" alt="" className="wisp wisp-b" />
       </div>
-      <img ref={bankA} src="/media/cloud-bank.svg" alt="" className="bank" />
-      <img ref={bankB} src="/media/cloud-bank.svg" alt="" className="bank" />
+      <img ref={bank} src="/media/cloud-bank.svg" alt="" className="bank" />
       <Snowfall />
       <div ref={grade} className="grade" />
       <div className="grain" />
