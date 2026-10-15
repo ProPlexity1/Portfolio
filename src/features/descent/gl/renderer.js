@@ -1,6 +1,6 @@
 // WebGL2 stage: the generated 3D mountain world (gl/world.js), the summit snow
 // close-up, and every footprint / pole hole multiplied on with baked lighting.
-import { HEIGHT_FS, HEIGHT_H, HEIGHT_W, WORLD_FS } from './world'
+import { heightShader, TIERS, worldShader } from './world'
 
 const FULLSCREEN_VS = `#version 300 es
 void main() {
@@ -16,6 +16,7 @@ uniform sampler2D uWorld, uSnow, uDetail;
 uniform vec2 uView;
 uniform float uDpr;
 uniform float uWorldA;
+uniform float uBicubic;   // 0 in lite: plain bilinear is enough and cheaper
 uniform vec3 uCam;        // close-up camera: scale, tx, ty (css px)
 uniform vec4 uMacro;      // close-up rect in photo px
 uniform float uMacroA;
@@ -48,7 +49,10 @@ vec3 bicubic(sampler2D t, vec2 uv) {
 void main() {
   vec2 q = vec2(gl_FragCoord.x, uView.y * uDpr - gl_FragCoord.y) / uDpr;
   vec3 col = vec3(0.64, 0.72, 0.76);
-  if (uWorldA > 0.0) col = bicubic(uWorld, gl_FragCoord.xy / (uView * uDpr));
+  if (uWorldA > 0.0) {
+    vec2 wuv = gl_FragCoord.xy / (uView * uDpr);
+    col = uBicubic > 0.5 ? bicubic(uWorld, wuv) : texture(uWorld, wuv).rgb;
+  }
   if (uMacroA > 0.001) {
     vec2 p0 = (q - uCam.yz) / uCam.x;
     vec2 m = (p0 - uMacro.xy) / uMacro.zw;
@@ -142,35 +146,43 @@ export async function loadImage(src) {
   return img
 }
 
-export function createRenderer(canvas, trail) {
+export function createRenderer(canvas, trail, startTier = 'full') {
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' })
   if (!gl) throw new Error('webgl2 unavailable')
   const aniso = gl.getExtension('EXT_texture_filter_anisotropic')
 
   const composite = compile(gl, FULLSCREEN_VS, COMPOSITE_FS)
-  const world = compile(gl, FULLSCREEN_VS, WORLD_FS)
   const print = compile(gl, PRINT_VS, PRINT_FS)
   const empty = gl.createVertexArray()
 
-  // ---- bake the terrain once into a height texture ----
+  // ---- per tier: the world program and the baked height texture ----
+  let tier = null
+  let world = null
   const heightTex = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, heightTex)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, HEIGHT_W, HEIGHT_H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
-  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v)
-  {
-    const bake = compile(gl, FULLSCREEN_VS, HEIGHT_FS)
+  const buildTier = (next) => {
+    if (next === tier) return
+    tier = next
+    if (world) gl.deleteProgram(world.prog)
+    world = compile(gl, FULLSCREEN_VS, worldShader(tier))
+    const { heightW, heightH } = TIERS[tier]
+    gl.bindTexture(gl.TEXTURE_2D, heightTex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, heightW, heightH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v)
+    // bake the terrain once into the height texture
+    const bake = compile(gl, FULLSCREEN_VS, heightShader(tier))
     const fb = gl.createFramebuffer()
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, heightTex, 0)
-    gl.viewport(0, 0, HEIGHT_W, HEIGHT_H)
+    gl.viewport(0, 0, heightW, heightH)
     gl.useProgram(bake.prog)
-    gl.uniform2f(bake.u.uSize, HEIGHT_W, HEIGHT_H)
+    gl.uniform2f(bake.u.uSize, heightW, heightH)
     gl.bindVertexArray(empty)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.deleteFramebuffer(fb)
     gl.deleteProgram(bake.prog)
   }
+  buildTier(startTier)
 
   // ---- the world is drawn into its own, smaller framebuffer ----
   const worldTex = gl.createTexture()
@@ -288,6 +300,7 @@ export function createRenderer(canvas, trail) {
     gl.uniform2f(U.uView, w, h)
     gl.uniform1f(U.uDpr, dpr)
     gl.uniform1f(U.uWorldA, showWorld ? 1 : 0)
+    gl.uniform1f(U.uBicubic, tier === 'lite' ? 0 : 1)
     gl.uniform3f(U.uCam, f.s, f.tx, f.ty)
     gl.uniform4f(U.uMacro, ...f.macro)
     gl.uniform1f(U.uMacroA, macro)
@@ -318,9 +331,11 @@ export function createRenderer(canvas, trail) {
 
   return {
     resize,
+    setTier: buildTier,
+    tier: () => tier,
     render,
     // block until the GPU has finished, for frame-time measurement
-    finish: () => gl.finish(),
+    finish: () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)),
     setSnow: (img) => upload('snow', img),
     setDetail: (img) => upload('detail', img, { raw: true, wrap: gl.REPEAT }),
     setAtlas: (img) => upload('atlas', img, { raw: true }),

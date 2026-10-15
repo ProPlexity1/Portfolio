@@ -17,7 +17,7 @@ export default function Snowfall() {
     let reduced = false
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const dpr = matchMedia('(pointer: coarse)').matches ? 1 : Math.min(window.devicePixelRatio || 1, 2)
       w = canvas.clientWidth
       h = canvas.clientHeight
       canvas.width = w * dpr

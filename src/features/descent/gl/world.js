@@ -35,10 +35,15 @@ const float H_MIN = -600.0, H_RANGE = 4800.0;
 // camera path and the DOM layer that places him on it
 export const ISLAND = [105, 6700]
 
-export const HEIGHT_W = 2048
-export const HEIGHT_H = 3072
+// Two tiers: 'full' for desktop GPUs, 'lite' for phones and weaker machines
+// (smaller height texture, far fewer march steps, no traced shadows or
+// reflections, lighter clouds).
+export const TIERS = {
+  full: { heightW: 2048, heightH: 3072 },
+  lite: { heightW: 1024, heightH: 1536 },
+}
 
-export const HEIGHT_FS = `#version 300 es
+export const heightShader = (tier) => `#version 300 es
 precision highp float;
 uniform vec2 uSize;
 out vec4 o;
@@ -75,8 +80,8 @@ float ridged(vec2 x, int oct) {
 float valleyX(float z) { return 260.0 * sin(z / 2300.0) - 120.0 * sin(z / 900.0 + 1.3); }
 
 float terrain(vec2 p) {
-  float e = erosion(p / 1700.0 + vec2(3.1, 7.4), 10);
-  float rg = ridged(p / 2300.0 + vec2(1.7, 4.2), 7);
+  float e = erosion(p / 1700.0 + vec2(3.1, 7.4), ${tier === 'lite' ? 8 : 10});
+  float rg = ridged(p / 2300.0 + vec2(1.7, 4.2), ${tier === 'lite' ? 6 : 7});
   float dx = abs(p.x - valleyX(p.y));
   float z = p.y;
   // the summit: a ridged pyramid rather than a cone
@@ -105,8 +110,9 @@ void main() {
   o = vec4(floor(v / 256.0) / 255.0, mod(v, 256.0) / 255.0, 0.0, 1.0);
 }`
 
-export const WORLD_FS = `#version 300 es
+export const worldShader = (tier) => `#version 300 es
 precision highp float;
+${tier === 'lite' ? '#define LITE' : ''}
 uniform sampler2D uHeight;
 uniform vec2 uRes;          // render target size (px)
 uniform vec3 uCamPos;
@@ -122,7 +128,7 @@ const vec3 SUN = normalize(vec3(-0.55, 0.42, 0.72));
 const vec3 SUN_COL = vec3(1.0, 0.95, 0.88);
 const vec3 SKY_COL = vec3(0.56, 0.68, 0.76);
 const vec3 FOG_COL = vec3(0.64, 0.72, 0.76);
-const vec2 SIZE = vec2(${HEIGHT_W}.0, ${HEIGHT_H}.0);
+const vec2 SIZE = vec2(${TIERS[tier].heightW}.0, ${TIERS[tier].heightH}.0);
 
 float texel(ivec2 i) {
   // mirror past the edges so the land carries on instead of smearing
@@ -146,10 +152,17 @@ float march(vec3 ro, vec3 rd, float tmax, int steps) {
   float t = 1.0;
   for (int i = 0; i < 300; i++) {
     if (i >= steps) break;
+#ifdef LITE
+    if (i >= 80) break;
+#endif
     vec3 p = ro + rd * t;
     float h = p.y - height(p.xz);
     if (h < 0.002 * t || t > tmax) break;
+#ifdef LITE
+    t += max(1.0, 0.6 * h);
+#else
     t += max(0.5, 0.45 * h);
+#endif
     if (p.y > 3400.0 && rd.y > 0.0) return tmax + 1.0;
   }
   return t;
@@ -168,7 +181,9 @@ vec3 normalAt(vec3 p, float t) {
   float near = smoothstep(2500.0, 200.0, t);
   vec2 tp = vec2(p.x + p.z * 0.7, p.y * 1.3 + p.z * 0.3);
   vec2 g = noised(tp / 9.0).yz * 0.55 * keep(9.0, t) + noised(tp / 3.1).yz * 0.25 * keep(3.1, t) + noised(p.xz / 40.0).yz * 0.35 * keep(40.0, t);
+#ifndef LITE
   n = normalize(n + vec3(g.x, 0.0, g.y) * 0.35 * near);
+#endif
   return n;
 }
 
@@ -191,7 +206,11 @@ vec3 skyColor(vec3 rd) {
   if (rd.y > 0.0) {
     vec2 uv = rd.xz / (rd.y + 0.12) * 1.6 + uTime * 0.004;
     float c = 0.0, a = 0.55;
+#ifdef LITE
+    for (int i = 0; i < 3; i++) { c += a * noise(uv); uv = M2 * uv * 2.03; a *= 0.5; }
+#else
     for (int i = 0; i < 5; i++) { c += a * noise(uv); uv = M2 * uv * 2.03; a *= 0.5; }
+#endif
     c = smoothstep(-0.15, 0.55, c);
     col = mix(col, mix(vec3(0.85, 0.88, 0.9), vec3(0.42, 0.50, 0.55), 0.5 - 0.5 * rd.y), c * 0.75 * smoothstep(0.0, 0.25, rd.y));
   }
@@ -216,7 +235,11 @@ vec3 shade(vec3 p, vec3 rd, float t) {
   vec3 alb = mix(rock, pine, forest);
   alb = mix(alb, vec3(0.93, 0.95, 0.97), snow);
 
+#ifdef LITE
+  float sh = 0.45 + 0.55 * smoothstep(0.05, 0.6, dot(n, SUN));
+#else
   float sh = 0.25 + 0.75 * softShadow(p + n * 3.0, SUN);   // never fully black: sky light fills shadows
+#endif
   float dif = max(dot(n, SUN), 0.0) * sh;
   float sky = 0.55 + 0.45 * n.y;
   float occ = clamp(0.55 + 0.45 * (p.y - height(p.xz + n.xz * 40.0) + 40.0) / 80.0, 0.35, 1.0);
@@ -247,9 +270,14 @@ vec4 clouds(vec3 ro, vec3 rd, float tmax) {
     t0 = max(t0, 0.0); t1 = min(t1, min(tmax, t0 + 6000.0));
   }
   if (t1 <= t0) return vec4(0.0);
-  float dt = (t1 - t0) / 10.0;
+#ifdef LITE
+  const int CS = 4;
+#else
+  const int CS = 10;
+#endif
+  float dt = (t1 - t0) / float(CS);
   vec4 acc = vec4(0.0);
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < CS; i++) {
     vec3 p = ro + rd * (t0 + dt * (float(i) + 0.5));
     float hy = (p.y - LO) / (HI - LO);
     vec2 q = p.xz / 900.0 + vec2(uTime * 0.01, 0.0);
@@ -282,8 +310,12 @@ void main() {
     vec2 wq = p.xz / 18.0 + uTime * 0.05;
     vec3 n = normalize(vec3(noised(wq).yz * 0.025 + noised(wq * 3.1).yz * 0.012, 1.0).xzy);
     vec3 rr = reflect(rd, n);
+#ifdef LITE
+    vec3 refl = mix(vec3(0.34, 0.40, 0.43), skyColor(rr), smoothstep(0.05, 0.35, rr.y));
+#else
     float tr = march(p + n * 0.5, rr, tmax, steps / 2);
     vec3 refl = tr < tmax ? fog(shade(p + rr * tr, rr, tr), p, rr, tr) : skyColor(rr);
+#endif
     float fres = 0.04 + 0.96 * pow(1.0 - max(dot(-rd, n), 0.0), 5.0);
     float depth = clamp(-height(p.xz) / 40.0, 0.0, 1.0);
     vec3 body = mix(vec3(0.13, 0.55, 0.55), vec3(0.02, 0.24, 0.26), depth);

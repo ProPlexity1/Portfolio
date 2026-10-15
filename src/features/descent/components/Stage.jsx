@@ -52,10 +52,17 @@ export default function Stage() {
 
     // world resolution adapts to the device: drop while frames are slow,
     // climb back when there is headroom, and sharpen once scrolling stops
+    // phones and small machines start in the lite tier; desktops start full
+    // and step down to lite themselves if they cannot keep up
     const coarse = matchMedia('(pointer: coarse)').matches
-    const MAX_SCALE = coarse ? 0.7 : 1
-    const MIN_SCALE = coarse ? 0.4 : 0.5
-    let scale = coarse ? 0.55 : 0.8
+    const weak = coarse || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4
+    // ?tier=lite|full forces a tier (for testing)
+    const forced = new URLSearchParams(window.location.search).get('tier')
+    const startTier = forced === 'lite' || forced === 'full' ? forced : weak ? 'lite' : 'full'
+    let MAX_SCALE = weak ? 0.5 : 1
+    let MIN_SCALE = weak ? 0.28 : 0.5
+    let scale = weak ? 0.4 : 0.8
+    let floorHits = 0
     let lastFrame = 0
     let slow = 0
     let idleTimer = 0
@@ -107,6 +114,13 @@ export default function Stage() {
           if (dt > 30) slow = Math.min(slow + 1, 10)
           else if (dt < 18) slow = Math.max(slow - 1, -8)
           if (slow >= 8) {
+            if (scale <= MIN_SCALE + 1e-3 && renderer.tier() === 'full' && ++floorHits >= 3) {
+              // still slow at the lowest resolution: switch to the lite tier
+              renderer.setTier('lite')
+              MAX_SCALE = 0.6
+              MIN_SCALE = 0.28
+              scale = 0.45
+            }
             scale = Math.max(MIN_SCALE, scale * 0.9)
             slow = 0
           } else if (slow <= -8) {
@@ -127,7 +141,7 @@ export default function Stage() {
           time: now / 1000,
           world: { ...cam, pos, fov: FOV },
           worldScale: idle ? MAX_SCALE : scale,
-          quality: idle ? 1 : 0.8,
+          quality: idle ? 1 : weak ? 0.3 : 0.8,
         })
       } else if (mode === 'css') {
         set(world.current, 'transform', `translate3d(${tx.toFixed(2)}px,${ty.toFixed(2)}px,0) scale(${s.toFixed(5)})`)
@@ -190,7 +204,25 @@ export default function Stage() {
       set(bank.current, 'transform', `translate3d(0,${(70 - ka * 170).toFixed(2)}vh,0) scale(${(1.6 - ka * 0.6).toFixed(3)})`)
 
       const introRunning = introStart >= 0 && now - introStart < 3300
-      return introRunning || settling || macroA > 0.01
+      // keep animating only for the intro walk and pointer easing (and the snow
+      // glints on desktop); idle phones draw nothing
+      return introRunning || settling || (!weak && macroA > 0.01)
+    }
+
+    // dev only: time the world render on the GPU (ms per frame) at a given scale
+    if (import.meta.env.DEV) {
+      window.__benchWorld = (n = 20, sc = 0.5) => {
+        if (!renderer) return null
+        const keep = [scale, idle]
+        scale = sc
+        idle = false
+        renderer.finish()
+        const t0 = performance.now()
+        for (let k = 0; k < n; k++) frame(performance.now())
+        renderer.finish()
+        ;[scale, idle] = keep
+        return (performance.now() - t0) / n
+      }
     }
 
     const loop = (now) => {
@@ -233,7 +265,7 @@ export default function Stage() {
 
     if (mode === 'gl') {
       try {
-        renderer = createRenderer(canvas.current, trail)
+        renderer = createRenderer(canvas.current, trail, startTier)
       } catch (e) {
         console.warn('[stage] falling back to the photo:', e)
         renderer = null
@@ -250,7 +282,7 @@ export default function Stage() {
         const cw = canvas.current.clientWidth
         const ch = canvas.current.clientHeight
         // cap the pixel count so big or dense screens stay smooth
-        renderer.resize(cw, ch, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(3.6e6 / (cw * ch))))
+        renderer.resize(cw, ch, Math.min(window.devicePixelRatio || 1, weak ? 1.6 : 2, Math.sqrt((weak ? 1.4e6 : 3.6e6) / (cw * ch))))
         request()
       }
       ro = new ResizeObserver(resize)
