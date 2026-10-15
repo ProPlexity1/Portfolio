@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FootprintSymbol } from '../art'
 import { STOPS } from '../content'
-import { buildTrail, bump, camera, clamp, headDistance, IMG_H, IMG_W, ramp, smoother, stage, state, subscribe } from '../engine'
+import { buildTrail, bump, camera, clamp, headDistance, IMG_H, IMG_W, ramp, stage, state, subscribe } from '../engine'
 import { createRenderer, loadImage } from '../gl/renderer'
-import { ISLAND, worldCamera } from '../gl/world'
+import { PERCH, worldCamera } from '../gl/world'
 import lqip from '../lqip'
 import Snowfall from './Snowfall'
 
@@ -13,7 +13,9 @@ const MACRO = [688, 402.8, 70, 58.33]
 // the climber on his rock, cut from the original photo, stood on the lake rock
 // in the 3D world. `height` is the cutout's real-world height in metres.
 const FG = { aspect: 1500 / 1069, personX: 0.488, chestY: 0.3, height: 2.1 }
-const FOV = Math.tan((50 * Math.PI) / 360)
+// vertical field of view: 50 degrees, opening to 64 on the final view so the
+// lake, the valley and the summit all fit around him
+const fovAt = (u, last) => Math.tan(((50 + 14 * Math.min(1, Math.max(0, (u - (last - 0.45)) / 0.45))) * Math.PI) / 360)
 
 const set = (el, key, value) => {
   if (el && el.__last?.[key] !== value) {
@@ -100,12 +102,10 @@ export default function Stage() {
 
       if (renderer) {
         // the 3D camera: path position plus a real look-around from the pointer
-        // on wide screens the camera swings a little as it arrives so he ends
-        // up left of centre, leaving room for the name
-        const aim = !portrait ? smoother(ramp(u, LAST - 0.7, LAST)) * Math.atan(((0.1 * vw) / (vh / 2)) * FOV) : 0
-        const cam = worldCamera(Math.max(1, u), -aim)
-        const look = 1 - ramp(u, LAST - 0.15, LAST) * 0.4
-        const off = [pointer.x * 22 * look, -pointer.y * 12 * look]
+        const cam = worldCamera(Math.max(1, u), 0, portrait)
+        // a gentle look-around: a few metres up high, almost nothing up close
+        const amp = 6 - 5.75 * ramp(u, LAST - 1, LAST)
+        const off = [pointer.x * amp, -pointer.y * amp * 0.5]
         const pos = cam.pos.map((v, k) => v + cam.right[k] * off[0] + cam.up[k] * off[1])
         // adapt resolution from the measured frame interval while moving
         if (lastFrame && !idle) {
@@ -139,7 +139,7 @@ export default function Stage() {
           head: dist,
           printA,
           time: now / 1000,
-          world: { ...cam, pos, fov: FOV },
+          world: { ...cam, pos, fov: fovAt(u, LAST) },
           worldScale: idle ? MAX_SCALE : scale,
           quality: idle ? 1 : weak ? 0.3 : 0.8,
         })
@@ -155,12 +155,12 @@ export default function Stage() {
       // his size and the look-around moves him with true parallax
       let shownFg = false
       if (view && u > LAST - 1.6) {
-        const v = [ISLAND[0] - view.pos[0], 0.25 - view.pos[1], ISLAND[1] - view.pos[2]]
+        const v = [PERCH[0] - view.pos[0], PERCH[1] - 0.15 - view.pos[1], PERCH[2] - view.pos[2]]
         const z = v[0] * view.fwd[0] + v[1] * view.fwd[1] + v[2] * view.fwd[2]
         if (z > 0.5) {
           const x = v[0] * view.right[0] + v[1] * view.right[1] + v[2] * view.right[2]
           const y = v[0] * view.up[0] + v[1] * view.up[1] + v[2] * view.up[2]
-          const k = vh / 2 / (z * FOV)            // px per metre at that distance
+          const k = vh / 2 / (z * fovAt(u, LAST))   // px per metre at that distance
           const sx = vw / 2 + x * k
           const sy = vh / 2 - y * k
           const fh = FG.height * k

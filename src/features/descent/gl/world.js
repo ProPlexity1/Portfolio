@@ -6,6 +6,13 @@
 // frame marches that texture (WORLD_FS), which is many times cheaper than
 // evaluating the noise per step. Fine detail near the camera stays procedural.
 
+// The cliff at the far end of the lake: the climber stands on its edge with
+// the whole lake and the summit in front of him. PERCH is where his feet are.
+export const CLIFF = { x: -11, z: 8300, top: 38 }
+// on the solid top of the rock, ~20 m back from the edge, so the ground under
+// his feet is really there
+export const PERCH = [CLIFF.x - 4, CLIFF.top - 1, CLIFF.z - 22]
+
 const COMMON = `
 // ---- noise -------------------------------------------------------------
 float hash12(vec2 p) {
@@ -25,15 +32,14 @@ vec3 noised(vec2 x) {
 float noise(vec2 x) { return noised(x).x; }
 const mat2 M2 = mat2(0.8, -0.6, 0.6, 0.8);
 
+const vec2 CLIFF_XZ = vec2(${CLIFF.x}.0, ${CLIFF.z}.0);
+const float CLIFF_TOP = ${CLIFF.top}.0;
 // the height texture covers this rectangle of the world (x, z, width, depth);
 // beyond it the terrain is mirrored, and fog hides the repeat
 const vec4 BOUNDS = vec4(-4800.0, -3600.0, 9600.0, 14400.0);
 const float H_MIN = -600.0, H_RANGE = 4800.0;
 `
 
-// where the climber's rock sits in the lake (world x, z); shared with the
-// camera path and the DOM layer that places him on it
-export const ISLAND = [105, 6700]
 
 // Two tiers: 'full' for desktop GPUs, 'lite' for phones and weaker machines
 // (smaller height texture, far fewer march steps, no traced shadows or
@@ -90,7 +96,7 @@ float terrain(vec2 p) {
   float peak = 3150.0 * pow(max(0.0, 1.0 - r / 2600.0), 1.55) * (0.78 + 0.32 * rg);
   // the valley floor runs from the foot of the peak down to the lake
   float t = smoothstep(500.0, 5800.0, z);
-  float floorH = mix(1500.0, -70.0, t);
+  float floorH = mix(1500.0, -70.0, t) + 260.0 * smoothstep(7900.0, 9200.0, z);
   float halfW = mix(330.0, 1450.0, smoothstep(0.0, 6000.0, z));
   float walls = smoothstep(halfW * 0.3, halfW * 1.5, dx + 160.0 * e);
   float sides = walls * (700.0 + 1250.0 * rg + 220.0 * e) * mix(0.8, 1.0, t);
@@ -99,7 +105,20 @@ float terrain(vec2 p) {
   // the lake basin, an irregular oval
   vec2 lk = vec2((p.x - valleyX(z)) / 1250.0, (z - 6950.0) / 1500.0);
   float basin = smoothstep(1.0, 0.72, length(lk) + 0.18 * noise(p / 520.0));
-  return mix(hh, -55.0 + e * 20.0, basin);
+  hh = mix(hh, -55.0 + e * 20.0, basin);
+  // the cliff: a flat-topped rock with a steep face down to the water,
+  // running back into the shore so it reads as a headland, not an island
+  vec2 cp = (p - CLIFF_XZ) * vec2(1.0, 1.2);
+  float cd = length(cp) + noise(p / 17.0) * 16.0 + noise(p / 6.0) * 5.0 + noise(p / 2.5) * 1.5;
+  // a rounded rock dome rather than a flat table, with broken rock on top
+  float top = CLIFF_TOP - cd * cd / 900.0 + noise(p / 16.0) * 2.0 + noise(p / 5.0) * 0.8;
+  // steep, broken rock face down to the water, jagged by the noise
+  float f = clamp((80.0 - cd) / 42.0, 0.0, 1.0);
+  float cliff = mix(-90.0, top, f * f * (3.0 - 2.0 * f));
+  // and it runs back into the shore
+  float back = smoothstep(CLIFF_XZ.y + 10.0, CLIFF_XZ.y + 160.0, p.y) * (1.0 - smoothstep(60.0, 140.0, abs(p.x - CLIFF_XZ.x)));
+  cliff = max(cliff, mix(-90.0, top + 3.0, back));
+  return max(hh, cliff);
 }
 
 void main() {
@@ -228,7 +247,9 @@ vec3 shade(vec3 p, vec3 rd, float t) {
   rock *= 0.8 + 0.35 * detail;
   float snowLine = mix(0.86, 0.5, smoothstep(300.0, 2600.0, h));
   float snow = smoothstep(snowLine - 0.06, snowLine + 0.06, n.y + 0.18 * noise(p.xz / 90.0) + 0.06 * detail);
-  snow = max(snow, smoothstep(0.88, 0.98, n.y) * smoothstep(70.0, 8.0, h) * smoothstep(-0.05, 0.3, noise(p.xz / 420.0) + 0.1 * detail));
+  float onCliff = 1.0 - smoothstep(70.0, 120.0, length(p.xz - CLIFF_XZ));
+  snow *= 1.0 - onCliff * 0.85;
+  snow = max(snow, (1.0 - onCliff) * smoothstep(0.88, 0.98, n.y) * smoothstep(70.0, 8.0, h) * smoothstep(-0.05, 0.3, noise(p.xz / 420.0) + 0.1 * detail));
   float forest = smoothstep(1250.0, 1050.0, h) * smoothstep(0.62, 0.8, n.y) * smoothstep(-0.15, 0.25, noise(p.xz / 260.0)) * smoothstep(8.0, 30.0, h);
   forest *= 1.0 - snow;
   vec3 pine = vec3(0.045, 0.085, 0.075) * (0.7 + 0.6 * noise(p.xz / 3.0) * keep(3.0, t));
@@ -345,10 +366,10 @@ export const WORLD_KEYS = [
   { pos: [-60, 2250, 2100], yaw: 0.12, pitch: -0.3 },
   { pos: [300, 1180, 2950], yaw: -0.12, pitch: -0.22 },
   { pos: [-160, 560, 4400], yaw: 0.06, pitch: -0.1 },
-  // turned round over the lake: the climber is a speck on his rock, far ahead
-  { pos: [ISLAND[0] + 30, 24, ISLAND[1] + 240], yaw: Math.PI, pitch: 0.07 },
-  // flown in low over the water until he fills the frame
-  { pos: [ISLAND[0], 1.6, ISLAND[1] + 3.7], yaw: Math.PI, pitch: 0.07 },
+  // out over the lake, facing the cliff at its far end: he is a small figure on top
+  { pos: [CLIFF.x + 40, 70, CLIFF.z - 900], yaw: 0.0, pitch: -0.02 },
+  // up on the cliff behind him, looking back over the lake to the summit
+  { pos: [PERCH[0] - 2, PERCH[1] + 2.6, PERCH[2] + 6.2], yaw: Math.PI, pitch: 0.07 },
 ]
 
 const lerp = (a, b, t) => a + (b - a) * t
@@ -356,24 +377,15 @@ const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10)
 
 // Camera for continuous stop index u (1 .. 7): Catmull-Rom through the stop
 // positions, angles eased between stops.
-export function worldCamera(u, yawOffset = 0) {
+export function worldCamera(u, yawOffset = 0, portrait = false) {
   const n = WORLD_KEYS.length - 1
   const uu = Math.min(n, Math.max(1, u))
   const i = Math.min(n - 1, Math.floor(uu))
   const t = uu - i
   const P = (k) => WORLD_KEYS[Math.min(n, Math.max(1, k))].pos
   const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2)
-  if (i === n - 1) {
-    // the fly-in to the climber: close the distance at a steady rate (each
-    // scroll step multiplies it by the same factor), so he grows evenly
-    const I = [ISLAND[0], 1, ISLAND[1]]
-    const d = (p) => Math.hypot(p[0] - I[0], p[1] - I[1], p[2] - I[2])
-    const dA = d(p1), dB = d(p2)
-    const want = dA * Math.pow(dB / dA, t)
-    const k = (dA - want) / (dA - dB)
-    const pos = [0, 1, 2].map((c) => p1[c] + (p2[c] - p1[c]) * k)
-    return orient(pos, WORLD_KEYS[i], WORLD_KEYS[i + 1], smoother(t), yawOffset)
-  }
+  // on tall screens end straight behind him so he stays in frame
+  if (i === n - 1) return arrive(p1, portrait ? [PERCH[0], p2[1], p2[2]] : p2, t, WORLD_KEYS[i + 1], yawOffset)
   const pos = [0, 1, 2].map((c) => {
     const a = p1[c], b = p2[c]
     const m1 = (p2[c] - p0[c]) * 0.5, m2 = (p3[c] - p1[c]) * 0.5
@@ -384,9 +396,38 @@ export function worldCamera(u, yawOffset = 0) {
   return orient(pos, WORLD_KEYS[i], WORLD_KEYS[i + 1], smoother(t), yawOffset)
 }
 
+const ramp01 = (v, a, b) => Math.min(1, Math.max(0, (v - a) / (b - a)))
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a))
+
+// The last leg: fly across the lake toward the cliff, then rise and swing
+// round behind the climber. The distance to him shrinks at a steady rate,
+// so he grows evenly; the camera keeps him in view until it settles on the
+// final view over his shoulder.
+function arrive(start, end, t, last, yawOffset) {
+  const A = PERCH
+  const rel = (p) => [p[0] - A[0], p[2] - A[2]]
+  const [sx, sz] = rel(start)
+  const [ex, ez] = rel(end)
+  const r0 = Math.hypot(sx, sz)
+  const r1 = Math.hypot(ex, ez)
+  const a0 = Math.atan2(sx, sz)
+  const a1 = Math.atan2(ex, ez)
+  const r = r0 * Math.pow(r1 / r0, ramp01(t, 0, 0.8))
+  const a = a0 + wrap(a1 - a0) * smoother(ramp01(t, 0.45, 1))
+  const y = lerp(start[1], end[1], smoother(ramp01(t, 0, 0.85)))
+  const pos = [A[0] + Math.sin(a) * r, y, A[2] + Math.cos(a) * r]
+  const lookYaw = Math.atan2(A[0] - pos[0], A[2] - pos[2])
+  const lookPitch = Math.atan2(A[1] + 1.1 - pos[1], Math.hypot(A[0] - pos[0], A[2] - pos[2]))
+  const w = smoother(ramp01(t, 0.6, 1))
+  const yaw = lookYaw + wrap(last.yaw - lookYaw) * w
+  return orientTo(pos, yaw + yawOffset, lerp(lookPitch, last.pitch, w))
+}
+
 function orient(pos, A, B, e, yawOffset) {
-  const yaw = lerp(A.yaw, B.yaw, e) + yawOffset
-  const pitch = lerp(A.pitch, B.pitch, e)
+  return orientTo(pos, lerp(A.yaw, B.yaw, e) + yawOffset, lerp(A.pitch, B.pitch, e))
+}
+
+function orientTo(pos, yaw, pitch) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch)
   const fwd = [sy * cp, sp, cy * cp]
   const right = [cy, 0, -sy]
