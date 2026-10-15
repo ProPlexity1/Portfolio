@@ -51,8 +51,9 @@ export default function Stage() {
     // world resolution adapts to the device: drop while frames are slow,
     // climb back when there is headroom, and sharpen once scrolling stops
     const coarse = matchMedia('(pointer: coarse)').matches
-    const MAX_SCALE = coarse ? 0.6 : 0.85
-    let scale = coarse ? 0.45 : 0.62
+    const MAX_SCALE = coarse ? 0.7 : 1
+    const MIN_SCALE = coarse ? 0.4 : 0.5
+    let scale = coarse ? 0.55 : 0.8
     let lastFrame = 0
     let slow = 0
     let idleTimer = 0
@@ -97,13 +98,14 @@ export default function Stage() {
         // adapt resolution from the measured frame interval while moving
         if (lastFrame && !idle) {
           const dt = now - lastFrame
-          if (dt > 26) slow = Math.min(slow + 1, 6)
-          else if (dt < 15) slow = Math.max(slow - 1, -12)
-          if (slow >= 4) {
-            scale = Math.max(0.28, scale * 0.85)
+          // only sustained slowness lowers the resolution; one hiccup does not
+          if (dt > 30) slow = Math.min(slow + 1, 10)
+          else if (dt < 18) slow = Math.max(slow - 1, -8)
+          if (slow >= 8) {
+            scale = Math.max(MIN_SCALE, scale * 0.9)
             slow = 0
-          } else if (slow <= -12) {
-            scale = Math.min(MAX_SCALE, scale * 1.06)
+          } else if (slow <= -8) {
+            scale = Math.min(MAX_SCALE, scale * 1.1)
             slow = 0
           }
         }
@@ -119,7 +121,7 @@ export default function Stage() {
           time: now / 1000,
           world: { ...cam, pos, fov: FOV },
           worldScale: idle ? MAX_SCALE : scale,
-          quality: idle ? 1 : 0.5,
+          quality: idle ? 1 : 0.8,
         })
       } else if (mode === 'css') {
         set(world.current, 'transform', `translate3d(${tx.toFixed(2)}px,${ty.toFixed(2)}px,0) scale(${s.toFixed(5)})`)
@@ -189,7 +191,7 @@ export default function Stage() {
         idle = true
         lastFrame = 0
         request()
-      }, 220)
+      }, 140)
     }
 
     // draw in the same frame the scroll changed, so the background never trails the page

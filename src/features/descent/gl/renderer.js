@@ -22,10 +22,33 @@ uniform float uMacroA;
 uniform float uTime;
 out vec4 o;
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+// bicubic (Catmull-Rom) upscale from bilinear taps: the world is drawn at
+// reduced resolution and this keeps it crisp instead of soft or blocky
+vec3 bicubic(sampler2D t, vec2 uv) {
+  vec2 size = vec2(textureSize(t, 0));
+  vec2 pos = uv * size, c = floor(pos - 0.5) + 0.5, f = pos - c;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  vec2 w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2;
+  vec2 t0 = (c - 1.0) / size, t3 = (c + 2.0) / size, t12 = (c + w2 / w12) / size;
+  vec3 r = vec3(0.0);
+  r += texture(t, vec2(t0.x, t0.y)).rgb * w0.x * w0.y;
+  r += texture(t, vec2(t12.x, t0.y)).rgb * w12.x * w0.y;
+  r += texture(t, vec2(t3.x, t0.y)).rgb * w3.x * w0.y;
+  r += texture(t, vec2(t0.x, t12.y)).rgb * w0.x * w12.y;
+  r += texture(t, vec2(t12.x, t12.y)).rgb * w12.x * w12.y;
+  r += texture(t, vec2(t3.x, t12.y)).rgb * w3.x * w12.y;
+  r += texture(t, vec2(t0.x, t3.y)).rgb * w0.x * w3.y;
+  r += texture(t, vec2(t12.x, t3.y)).rgb * w12.x * w3.y;
+  r += texture(t, vec2(t3.x, t3.y)).rgb * w3.x * w3.y;
+  return max(r, 0.0);
+}
 void main() {
   vec2 q = vec2(gl_FragCoord.x, uView.y * uDpr - gl_FragCoord.y) / uDpr;
   vec3 col = vec3(0.64, 0.72, 0.76);
-  if (uWorldA > 0.0) col = texture(uWorld, gl_FragCoord.xy / (uView * uDpr)).rgb;
+  if (uWorldA > 0.0) col = bicubic(uWorld, gl_FragCoord.xy / (uView * uDpr));
   if (uMacroA > 0.001) {
     vec2 p0 = (q - uCam.yz) / uCam.x;
     vec2 m = (p0 - uMacro.xy) / uMacro.zw;

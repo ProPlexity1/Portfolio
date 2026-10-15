@@ -151,6 +151,11 @@ float march(vec3 ro, vec3 rd, float tmax, int steps) {
   return t;
 }
 
+// world size of one rendered pixel at distance t; detail finer than this
+// only flickers between frames, so it is faded out (a cheap mip for noise)
+float pixelSize(float t) { return t * uFov * 2.0 / uRes.y; }
+float keep(float period, float t) { return clamp(1.5 - 2.0 * pixelSize(t) / period, 0.0, 1.0); }
+
 vec3 normalAt(vec3 p, float t) {
   float eps = BOUNDS.z / SIZE.x;
   vec2 e = vec2(eps, 0.0);
@@ -158,7 +163,7 @@ vec3 normalAt(vec3 p, float t) {
   // close up, add surface detail the texture is too coarse to hold
   float near = smoothstep(2500.0, 200.0, t);
   vec2 tp = vec2(p.x + p.z * 0.7, p.y * 1.3 + p.z * 0.3);
-  vec2 g = noised(tp / 9.0).yz * 0.55 + noised(tp / 3.1).yz * 0.25 + noised(p.xz / 40.0).yz * 0.35;
+  vec2 g = noised(tp / 9.0).yz * 0.55 * keep(9.0, t) + noised(tp / 3.1).yz * 0.25 * keep(3.1, t) + noised(p.xz / 40.0).yz * 0.35 * keep(40.0, t);
   n = normalize(n + vec3(g.x, 0.0, g.y) * 0.35 * near);
   return n;
 }
@@ -193,7 +198,7 @@ vec3 shade(vec3 p, vec3 rd, float t) {
   vec3 n = normalAt(p, t);
   float h = p.y;
   vec2 tp = vec2(p.x + p.z * 0.7, p.y * 1.3 + p.z * 0.3);  // samples faces as well as tops
-  float detail = noise(tp / 6.0) * 0.5 + noise(tp / 1.7) * 0.25 + noise(tp / 22.0) * 0.4;
+  float detail = noise(tp / 6.0) * 0.5 * keep(6.0, t) + noise(tp / 1.7) * 0.25 * keep(1.7, t) + noise(tp / 22.0) * 0.4 * keep(22.0, t);
   float strata = noise(vec2(h / 28.0 + noise(p.xz / 180.0) * 2.0, 0.5));
   vec3 rock = mix(vec3(0.24, 0.235, 0.235), vec3(0.44, 0.42, 0.40), 0.5 + 0.35 * strata + 0.25 * noise(tp / 40.0));
   rock = mix(rock, vec3(0.36, 0.31, 0.27), 0.25 * smoothstep(0.2, 0.7, noise(p.xz / 300.0)));
@@ -203,7 +208,7 @@ vec3 shade(vec3 p, vec3 rd, float t) {
   snow = max(snow, smoothstep(0.88, 0.98, n.y) * smoothstep(70.0, 8.0, h) * smoothstep(-0.05, 0.3, noise(p.xz / 420.0) + 0.1 * detail));
   float forest = smoothstep(1250.0, 1050.0, h) * smoothstep(0.62, 0.8, n.y) * smoothstep(-0.15, 0.25, noise(p.xz / 260.0)) * smoothstep(8.0, 30.0, h);
   forest *= 1.0 - snow;
-  vec3 pine = vec3(0.045, 0.085, 0.075) * (0.7 + 0.6 * noise(p.xz / 3.0));
+  vec3 pine = vec3(0.045, 0.085, 0.075) * (0.7 + 0.6 * noise(p.xz / 3.0) * keep(3.0, t));
   vec3 alb = mix(rock, pine, forest);
   alb = mix(alb, vec3(0.93, 0.95, 0.97), snow);
 
@@ -214,7 +219,6 @@ vec3 shade(vec3 p, vec3 rd, float t) {
   vec3 lit = SUN_COL * dif * 1.55 + SKY_COL * sky * 0.62 * occ;
   lit = mix(lit, lit * vec3(0.86, 0.94, 1.08), snow * (1.0 - dif));   // blue snow in shade
   vec3 col = alb * lit;
-  col += snow * step(0.997, hash12(floor(p.xz * 3.0))) * dif * smoothstep(400.0, 40.0, t) * 0.8;
   return col;
 }
 
@@ -242,7 +246,7 @@ vec4 clouds(vec3 ro, vec3 rd, float tmax) {
   float dt = (t1 - t0) / 10.0;
   vec4 acc = vec4(0.0);
   for (int i = 0; i < 10; i++) {
-    vec3 p = ro + rd * (t0 + dt * (float(i) + hash12(gl_FragCoord.xy + float(i))));
+    vec3 p = ro + rd * (t0 + dt * (float(i) + 0.5));
     float hy = (p.y - LO) / (HI - LO);
     vec2 q = p.xz / 900.0 + vec2(uTime * 0.01, 0.0);
     float d = noise(q) * 0.6 + noise(M2 * q * 2.1) * 0.3 + noise(M2 * q * 4.3) * 0.15;
@@ -292,7 +296,7 @@ void main() {
   col = aces(col * 1.05);
   col = mix(col, col * vec3(0.94, 1.0, 1.03), 0.6);
   col = pow(col, vec3(0.95));
-  col += (hash12(gl_FragCoord.xy + uTime) - 0.5) / 255.0;
+  col += (hash12(gl_FragCoord.xy) - 0.5) / 255.0;   // static dither, no shimmer
   o = vec4(col, 1.0);
 }`
 
