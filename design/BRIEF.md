@@ -25,8 +25,8 @@ What the owner (Ukasha) asked for after the generated-3D version, in their words
 - `reference/original-portrait.webp`: the original photo (1500x2000), the main size and look reference for the ending.
 - `reference/original-panorama.webp`: a wide, AI-extended version of the same scene. The scenery may be used (confirmed 2026-10-16), but **never his figure or face from it**: they are cartoonish. He always comes from the real portrait.
 - `plates/climber-portrait.png`: a clean full-resolution matte of him, cut from the real portrait (`scripts/plates/climber.py`).
-- `reference/real-landscape.jpg`: a real, unedited wide photo of the same lake from the same rock (2026-10-16, chat upload at 2000x1500; the full-size original is better). Preferred base for the scene: graded to the portrait's look, the person on the rock removed and the real climber placed there (`scripts/plates/real_scene.py`).
-- Fallback: the panorama with its AI figure swapped for the real foreground from the portrait (him and his rock), at the same scale and spot (`scripts/plates/swap_figure.py`). The owner rejected a stitched wide merge and a framed portrait with blurred sides.
+- `reference/real-landscape.jpg`: a real, unedited wide photo of the same lake from the same rock (2026-10-16, chat upload at 2000x1500; the full-size original is better). Tried as a base (`scripts/plates/real_scene.py`), but the owner chose the panorama swap below.
+- **Live scene (approved 2026-10-16):** the panorama with its AI figure swapped for the real foreground from the portrait (him and his rock), at the same scale and spot (`scripts/plates/swap_figure.py`). The owner rejected a stitched wide merge and a framed portrait with blurred sides.
 - `reference/*-upscaled-*.webp`: 4x upscales (Real-ESRGAN) for cutting high-res plates.
 - `reference/climber-cutout.png`: the climber matte from the portrait.
 
