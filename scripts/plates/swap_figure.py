@@ -4,7 +4,7 @@
 # (fitted on head, pole and pack). The real foreground is cut by depth (him and
 # the rock pile, against the lake), its far sides fade into the panorama's own
 # rubble, and any slivers of the AI figure left outside it are inpainted away.
-# Usage: python3 swap_figure.py design/reference/panorama-upscaled-8000x3048.webp design/reference/original-portrait.webp design/plates/portrait-low-depth.npy design/plates/ai-figure-depth.npy <out.png>
+# Usage: python3 swap_figure.py design/reference/panorama-upscaled-8000x3048.webp design/reference/original-portrait.webp design/plates/portrait-low-depth.npy design/plates/ai-figure-depth.npy <out.png> [fg_alpha.png]
 import sys, numpy as np, cv2
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
@@ -52,3 +52,5 @@ pano[y0:y1, x0:x1] = cv2.inpaint(pano[y0:y1, x0:x1], left[y0:y1, x0:x1] * 255, 9
 out = pano.astype(np.float32) / 255
 out = fg * fa[..., None] + out * (1 - fa[..., None])
 cv2.imwrite(sys.argv[5], np.clip(out * 255 + 0.5, 0, 255).astype(np.uint8))
+if len(sys.argv) > 6:   # the real foreground's coverage (him and his rock), for layering
+    cv2.imwrite(sys.argv[6], np.clip(fa * 255 + 0.5, 0, 255).astype(np.uint8))
