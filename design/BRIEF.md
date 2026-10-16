@@ -23,7 +23,7 @@ What the owner (Ukasha) asked for after the generated-3D version, in their words
 
 ## Sources
 - `reference/original-portrait.webp`: the original photo (1500x2000), the main size and look reference for the ending.
-- `reference/original-panorama.webp`: a wide, AI-extended version of the same scene. **Never put it on the site.** His face is cartoonish in it. Do not use any of it, figure or scenery, without asking first.
+- `reference/original-panorama.webp`: a wide, AI-extended version of the same scene. The scenery may be used (confirmed 2026-10-16), but **never his figure or face from it**: they are cartoonish. He always comes from the real portrait.
 - `plates/climber-portrait.png`: a clean full-resolution matte of him, cut from the real portrait (`scripts/plates/climber.py`).
 - `reference/*-upscaled-*.webp`: 4x upscales (Real-ESRGAN) for cutting high-res plates.
 - `reference/climber-cutout.png`: the climber matte from the portrait.
