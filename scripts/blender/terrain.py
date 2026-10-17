@@ -524,8 +524,8 @@ def place_camera(k):
     e = k * k * (3 - 2 * k)
     if him_pos is not None:
         leftv = Vector((-math.sin(yaw), math.cos(yaw), 0))
-        start = him_pos - fwd * 7.5 + leftv * 2.6 + Vector((0, 0, 2.4))
-        near_target = him_pos + fwd * 40 - Vector((0, 0, 9))     # past him, a little down
+        start = him_pos - fwd * 4.2 + leftv * 1.8 + Vector((0, 0, 1.1))
+        near_target = him_pos + fwd * 30 - Vector((0, 0, 7))     # past him, a little down
         far_target = him_pos + fwd * 4000 - Vector((0, 0, 700))
         tgt = near_target.lerp(far_target, min(1.0, e * 1.3))
         loc = start - fwd * (650 * e ** 1.5) + Vector((0, 0, 420 * e ** 2.0))
