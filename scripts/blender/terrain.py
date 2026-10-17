@@ -321,16 +321,238 @@ for a in np.linspace(0, 2 * math.pi, 72, endpoint=False):
     if best is None or score > best[0]:
         best = (score, a)
 yaw = best[1]
+if os.environ.get('SX'):
+    sx, sy, yaw = float(os.environ['SX']), float(os.environ['SY']), float(os.environ['YAW'])
+    sz = height_at(sx, sy)
 print('SUMMIT', round(sx), round(sy), round(sz + z0), 'yaw', round(math.degrees(yaw)))
 # stand just behind the top, eye a little above it, looking down the valley
-back = 40
-cam.location = (sx - math.cos(yaw) * back, sy - math.sin(yaw) * back, max(sz, height_at(sx - math.cos(yaw) * back, sy - math.sin(yaw) * back)) + 30)
-cam.rotation_euler = Euler((math.radians(76), 0, yaw - math.pi / 2))
-cam_data.lens = 22
+# walk out from the top to where the ground falls away: the spur hangs off that edge
+edge = 0.0
+while edge < 400 and height_at(sx + math.cos(yaw) * edge, sy + math.sin(yaw) * edge) > sz - 10:
+    edge += 2.0
+back = float(os.environ.get('BACK', '5')) - edge
+bx_, by_ = sx - math.cos(yaw) * back, sy - math.sin(yaw) * back
+print('EDGE', edge)
+base = Vector((bx_, by_, max(sz, height_at(bx_, by_)) + float(os.environ.get('EYE', '2.2'))))
+fwd = Vector((math.cos(yaw), math.sin(yaw), 0))
+up = Vector((0, 0, 1))
+PITCH = math.radians(76)
+
+# him on the rock spur: a card cut from his own summit clip, set out over the
+# drop in front of the camera, square to the opening view
+SPUR = os.environ.get('SPUR')
+CARD_D = 6.0                                  # metres in front of the opening camera
+HFOV = math.radians(68)                       # the phone's view: the card fills the frame
+if SPUR:
+    img = bpy.data.images.load(SPUR)
+    cw = 2 * CARD_D * math.tan(HFOV / 2)
+    ch = cw * img.size[1] / img.size[0]
+    me_ = bpy.data.meshes.new('spur')
+    me_.from_pydata([(-0.5, -0.5, 0), (0.5, -0.5, 0), (0.5, 0.5, 0), (-0.5, 0.5, 0)], [], [(0, 1, 2, 3)])
+    uv = me_.uv_layers.new(name='UVMap')
+    for li, (u_, v_) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        uv.data[li].uv = (u_, v_)
+    card = bpy.data.objects.new('spur', me_)
+    sc.collection.objects.link(card)
+    card.scale = (cw, ch, 1)
+    rot = Euler((PITCH, 0, yaw - math.pi / 2))
+    card.rotation_euler = rot
+    view = rot.to_matrix() @ Vector((0, 0, -1))
+    card.location = base + view * CARD_D
+    mat = bpy.data.materials.new('spur')
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = nt.nodes['Principled BSDF']
+    t = nt.nodes.new('ShaderNodeTexImage')
+    t.image = img
+    # match the render's cool overcast light
+    hsv = nt.nodes.new('ShaderNodeHueSaturation')
+    hsv.inputs['Saturation'].default_value = 0.55
+    hsv.inputs['Value'].default_value = 0.92
+    link(nt, t.outputs['Color'], hsv.inputs['Color'])
+    cool = nt.nodes.new('ShaderNodeMix'); cool.data_type = 'RGBA'; cool.blend_type = 'MULTIPLY'
+    cool.inputs['Factor'].default_value = 1.0
+    link(nt, hsv.outputs['Color'], cool.inputs['A'])
+    cool.inputs['B'].default_value = (0.86, 0.93, 1.0, 1)
+    emit = nt.nodes.new('ShaderNodeEmission')
+    link(nt, cool.outputs['Result'], emit.inputs['Color'])
+    emit.inputs['Strength'].default_value = float(os.environ.get('SPUR_GAIN', '1.0'))
+    tr = nt.nodes.new('ShaderNodeBsdfTransparent')
+    mix_ = nt.nodes.new('ShaderNodeMixShader')
+    link(nt, t.outputs['Alpha'], mix_.inputs['Fac'])
+    link(nt, tr.outputs[0], mix_.inputs[1])
+    link(nt, emit.outputs[0], mix_.inputs[2])
+    link(nt, mix_.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
+    mat.blend_method = 'HASHED'
+    me_.materials.append(mat)
+    card.visible_shadow = False
+    # the spur grows out of a big rock: a scanned boulder (Poly Haven boulder_01)
+    # sunk under the card's cut-off left edge
+    bpath = os.path.join(ASSETS, 'boulder_01', 'boulder_01.blend')
+    with bpy.data.libraries.load(bpath, link=False) as (src, dst):
+        dst.objects = [n for n in src.objects if n == 'boulder_01_LOD0']
+    rock = dst.objects[0]
+    sc.collection.objects.link(rock)
+    right = rot.to_matrix() @ Vector((1, 0, 0))
+    upv = rot.to_matrix() @ Vector((0, 1, 0))
+    # the spur's root: where its left edge meets the frame, carried back to the ridge
+    root = card.location - right * (cw * 0.5) - upv * (ch * 0.18)
+    gz = height_at(root.x, root.y)
+    print('ROOT', round(root.z - gz, 1), 'm above ground')
+    rock.location = (root.x, root.y, min(root.z, gz + 0.6) - 1.2)
+    rock.scale = (4.2, 4.2, 3.6)
+    extra = []
+    for k_, (ox_, oy_, sc_) in enumerate([(-3.0, -2.5, 3.2), (2.0, -4.0, 2.6), (-5.5, 1.0, 2.8)]):
+        r2 = rock.copy()
+        r2.data = rock.data
+        sc.collection.objects.link(r2)
+        p2 = root - right * ox_ * -1 + fwd * oy_
+        r2.location = (p2.x, p2.y, height_at(p2.x, p2.y) - 0.6)
+        r2.scale = (sc_, sc_, sc_ * 0.8)
+        r2.rotation_euler = (0, 0, yaw + k_ * 1.7)
+    for slot in rock.material_slots:
+        nt_r = slot.material.node_tree
+        br = next(n for n in nt_r.nodes if n.type == 'BSDF_PRINCIPLED')
+        if br.inputs['Base Color'].links:
+            src_ = br.inputs['Base Color'].links[0].from_socket
+            hs = nt_r.nodes.new('ShaderNodeHueSaturation')
+            hs.inputs['Saturation'].default_value = 0.3
+            hs.inputs['Value'].default_value = 1.1
+            link(nt_r, src_, hs.inputs['Color'])
+            link(nt_r, hs.outputs['Color'], br.inputs['Base Color'])
+    rock.rotation_euler = (0, 0, yaw)
+
+HIM = os.environ.get('HIM')
+him_pos = None
+if HIM:
+    # ---- the spur: a tapering stone horn growing out of the edge, over the drop
+    import random as _r
+    rr = _r.Random(4)
+    ex, ey = sx + math.cos(yaw) * edge, sy + math.sin(yaw) * edge
+    side = math.radians(28)                                  # points out a little to the right
+    d = Vector((math.cos(yaw - side), math.sin(yaw - side), math.tan(math.radians(9)))).normalized()
+    root = Vector((ex - math.cos(yaw) * 2.5, ey - math.sin(yaw) * 2.5, 0))
+    root.z = height_at(root.x, root.y) - 0.4
+    L, R0, R1, RINGS, SEG = 8.5, 1.25, 0.42, 28, 20
+    a_ = d.orthogonal().normalized()
+    b_ = d.cross(a_).normalized()
+    verts, faces = [], []
+    for i in range(RINGS + 1):
+        t = i / RINGS
+        r = R0 + (R1 - R0) * t ** 0.8
+        if t > 0.9:
+            r *= math.sqrt(max(0.0, 1 - ((t - 0.9) / 0.1) ** 2)) * 0.9 + 0.1
+        c = root + d * (L * t) + Vector((0, 0, -0.35 * math.sin(t * math.pi)))
+        for j in range(SEG):
+            ang = 2 * math.pi * j / SEG
+            k = 1 + 0.12 * math.sin(ang * 3 + i * 0.7) + rr.uniform(-0.05, 0.05)
+            flat = 0.78 if math.sin(ang) > 0 else 1.0        # a flatter top to sit on
+            verts.append(c + (a_ * math.cos(ang) + b_ * math.sin(ang) * flat) * r * k)
+    for i in range(RINGS):
+        for j in range(SEG):
+            q = i * SEG
+            faces.append((q + j, q + (j + 1) % SEG, q + SEG + (j + 1) % SEG, q + SEG + j))
+    tip = len(verts)
+    verts.append(root + d * (L * 1.01))
+    for j in range(SEG):
+        faces.append((RINGS * SEG + j, RINGS * SEG + (j + 1) % SEG, tip))
+    me_s = bpy.data.meshes.new('spur')
+    me_s.from_pydata([tuple(v) for v in verts], [], faces)
+    me_s.polygons.foreach_set('use_smooth', [True] * len(me_s.polygons))
+    spur = bpy.data.objects.new('spur', me_s)
+    sc.collection.objects.link(spur)
+    sub_ = spur.modifiers.new('sub', 'SUBSURF'); sub_.levels = sub_.render_levels = 2
+    sm_ = bpy.data.materials.new('spur_rock')
+    sm_.use_nodes = True
+    nt = sm_.node_tree
+    bs = nt.nodes['Principled BSDF']
+    tc_ = nt.nodes.new('ShaderNodeTexCoord')
+    R_ = os.path.join(ASSETS, 'rock_face_03', 'rock_face_03_')
+    rdif = tex(nt, R_ + 'Diffuse.png', True, 2.2, tc_.outputs['Object'])
+    tint = nt.nodes.new('ShaderNodeMix'); tint.data_type = 'RGBA'; tint.blend_type = 'MULTIPLY'
+    tint.inputs['Factor'].default_value = 1.0
+    link(nt, rdif.outputs['Color'], tint.inputs['A'])
+    tint.inputs['B'].default_value = (1.0, 0.86, 0.68, 1)      # the clip's pale tan granite
+    bri = nt.nodes.new('ShaderNodeHueSaturation'); bri.inputs['Value'].default_value = 1.35; bri.inputs['Saturation'].default_value = 0.6
+    link(nt, tint.outputs['Result'], bri.inputs['Color'])
+    link(nt, bri.outputs['Color'], bs.inputs['Base Color'])
+    rnor = tex(nt, R_ + 'nor_gl.png', False, 2.2, tc_.outputs['Object'])
+    nmap = nt.nodes.new('ShaderNodeNormalMap'); nmap.inputs['Strength'].default_value = 1.2
+    link(nt, rnor.outputs['Color'], nmap.inputs['Color']); link(nt, nmap.outputs['Normal'], bs.inputs['Normal'])
+    bs.inputs['Roughness'].default_value = 0.85
+    me_s.materials.append(sm_)
+
+    # ---- him, sitting near the tip, a card square to the opening camera
+    img_h = bpy.data.images.load(HIM)
+    hh = 1.3
+    hw = hh * img_h.size[0] / img_h.size[1]
+    seat = root + d * (L * 0.8)
+    seat.z += R1 * 0.95 + 0.05
+    him_pos = seat
+    me_h = bpy.data.meshes.new('him')
+    me_h.from_pydata([(-0.5, 0, 0), (0.5, 0, 0), (0.5, 0, 1), (-0.5, 0, 1)], [], [(0, 1, 2, 3)])
+    uvh = me_h.uv_layers.new(name='UVMap')
+    for li, uvv in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        uvh.data[li].uv = uvv
+    him_ob = bpy.data.objects.new('him', me_h)
+    sc.collection.objects.link(him_ob)
+    him_ob.scale = (hw, 1, hh)
+    seat_px = 462 / 500                                       # where he meets the rock in the image
+    him_ob.location = seat - Vector((0, 0, hh * (1 - seat_px)))
+    him_ob.rotation_euler = (0, 0, yaw - math.pi / 2 - side * 0.35)
+    hm = bpy.data.materials.new('him')
+    hm.use_nodes = True
+    nt = hm.node_tree
+    t_ = nt.nodes.new('ShaderNodeTexImage'); t_.image = img_h
+    hs_ = nt.nodes.new('ShaderNodeHueSaturation'); hs_.inputs['Saturation'].default_value = 0.8; hs_.inputs['Value'].default_value = 0.95
+    link(nt, t_.outputs['Color'], hs_.inputs['Color'])
+    em = nt.nodes.new('ShaderNodeEmission'); em.inputs['Strength'].default_value = 0.9
+    link(nt, hs_.outputs['Color'], em.inputs['Color'])
+    trn = nt.nodes.new('ShaderNodeBsdfTransparent')
+    mx = nt.nodes.new('ShaderNodeMixShader')
+    link(nt, t_.outputs['Alpha'], mx.inputs['Fac']); link(nt, trn.outputs[0], mx.inputs[1]); link(nt, em.outputs[0], mx.inputs[2])
+    link(nt, mx.outputs[0], nt.nodes['Material Output'].inputs['Surface'])
+    hm.blend_method = 'HASHED'
+    me_h.materials.append(hm)
+
+def look_at(pos, target):
+    q = (target - pos).to_track_quat('-Z', 'Y')
+    return q.to_euler()
+
+def place_camera(k):
+    """k 0: just behind him, looking past him over the drop; 1: far back and high"""
+    e = k * k * (3 - 2 * k)
+    if him_pos is not None:
+        leftv = Vector((-math.sin(yaw), math.cos(yaw), 0))
+        start = him_pos - fwd * 7.5 + leftv * 2.6 + Vector((0, 0, 2.4))
+        near_target = him_pos + fwd * 40 - Vector((0, 0, 9))     # past him, a little down
+        far_target = him_pos + fwd * 4000 - Vector((0, 0, 700))
+        tgt = near_target.lerp(far_target, min(1.0, e * 1.3))
+        loc = start - fwd * (650 * e ** 1.5) + Vector((0, 0, 420 * e ** 2.0))
+    else:
+        loc = base - fwd * (700 * e ** 1.5) + up * (520 * e ** 2.2)
+        tgt = loc + Euler((PITCH, 0, yaw - math.pi / 2)).to_matrix() @ Vector((0, 0, -100))
+    g = max(height_at(loc.x + dx_, loc.y + dy_) for dx_ in (-20, 0, 20) for dy_ in (-20, 0, 20))
+    loc.z = max(loc.z, g + 1.6 + 0.06 * (loc - base).length)
+    cam.location = loc
+    cam.rotation_euler = look_at(loc, tgt)
+    cam_data.sensor_fit = 'HORIZONTAL'
+    cam_data.angle = HFOV + (math.radians(80) - HFOV) * e
+
 # side light: sun to the right of the view, low
 az = yaw - math.radians(70)
 so.rotation_euler = Euler((math.radians(90 - 14), 0, az + math.pi / 2))
 mpw.inputs['Rotation'].default_value[2] = az - math.radians(float(os.environ.get('SKY_SUN_AZ', '0')))
-sc.render.filepath = OUT
-bpy.ops.render.render(write_still=True)
+KS = [float(k) for k in os.environ.get('KS', '').split(',') if k] if (SPUR or HIM) else []
+if KS:
+    for i_, k in enumerate(KS):
+        place_camera(k)
+        sc.render.filepath = OUT.replace('.png', f'_{i_:03d}.png')
+        bpy.ops.render.render(write_still=True)
+        print('RENDERED', k, flush=True)
+else:
+    cam.location = base
+    cam.rotation_euler = Euler((PITCH, 0, yaw - math.pi / 2))
+    sc.render.filepath = OUT
+    bpy.ops.render.render(write_still=True)
 print('RENDERED', OUT)
